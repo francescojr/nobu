@@ -9,5 +9,5 @@ soundfile>=0.12
 # tinysoundfont==0.3.7
 
 # System tools (not pip):
-#   FluidSynth  — richer .mid → .ogg via scripts/render_midi.py
-#   ffmpeg      — WAV → OGG in scripts/render_track.py
+#   FluidSynth  — full SF2 render to WAV (scripts/render_* --mode sf2)
+#   ffmpeg      — WAV → OGG (recommended on Windows; render_track + SF2 path)

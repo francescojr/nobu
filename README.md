@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![Version](https://img.shields.io/badge/version-0.1.1-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.1.4-blue.svg)](CHANGELOG.md)
 [![Changelog](https://img.shields.io/badge/changelog-Keep%20a%20Changelog-orange.svg)](CHANGELOG.md)
 
 Plug nobu into **Cursor**, **Claude Desktop**, or **Kilo Code**. Ask an agent to compose a stage theme — get a real multi-track `.mid`, then render to `.ogg` / `.wav` for your engine.
@@ -81,6 +81,8 @@ python scripts/render_midi.py --mode chip   # always works, no SF2 needed
 | `sf2` | Full SoundFont (all instruments) | `.sf2` + FluidSynth CLI (else → chip) |
 | `auto` | Best available | Never fails — degrades to chip |
 
+Full **SF2** always does FluidSynth → **WAV**, then converts to **OGG** (prefer `ffmpeg` on Windows). FluidSynth is not asked to write OGG directly.
+
 ```bash
 python scripts/render_midi.py --mode chip
 python scripts/render_midi.py --mode sf2 --soundfont assets/soundfonts/default.sf2
@@ -100,8 +102,8 @@ python scripts/render_track.py assets/midi/biome1_calm.mid --mode hybrid
 | `assets/midi/` | Generated / authored `.mid` files |
 | `assets/soundfonts/` | Your `.sf2` files (not vendored — see README there) |
 | `output/audio/` | Rendered `.ogg` / `.wav` |
-| `scripts/render_midi.py` | Batch MIDI → audio (chiptune synth or FluidSynth) |
-| `scripts/render_track.py` | Hybrid: SF2 drums + chiptune melodic |
+| `scripts/render_midi.py` | Batch MIDI → audio (`chip` / `hybrid` / `sf2` / `auto`) |
+| `scripts/render_track.py` | Single-file render (same modes; SF2 → WAV → OGG) |
 | `examples/demo_biome_ost.py` | Generic 4-biome × calm/combat demo |
 | `.claude/skills/game-music-producer/` | Agent skill + theory references |
 
@@ -192,7 +194,8 @@ python scripts/render_midi.py --mode chip   # funciona sem SF2
 ```
 
 Modos: `chip` (puro) · `hybrid` (SF2 drums + chip) · `sf2` (SoundFont completo).  
-Sem SF2/FluidSynth → fallback automático para chiptune (não quebra).
+Sem SF2/FluidSynth → fallback automático para chiptune (não quebra).  
+SF2: FluidSynth → WAV → OGG (`ffmpeg` recomendado no Windows).
 
 Detalhes: [AGENTS.md](AGENTS.md) · [SETUP.md](.claude/skills/game-music-producer/SETUP.md).
 

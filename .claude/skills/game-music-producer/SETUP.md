@@ -39,7 +39,9 @@ For richer `.mid` → `.ogg` rendering:
 # Linux:    apt install fluidsynth
 ```
 
-Full SF2 mode always does **FluidSynth → WAV**, then converts to OGG with `ffmpeg` when available (`soundfile` is a fallback). Chip/hybrid write OGG from the in-memory buffer via `soundfile` when possible.
+Full SF2 mode always does **FluidSynth → WAV**, then converts to OGG with **`ffmpeg`** when available. On non-Windows, `soundfile` may convert WAV→OGG if ffmpeg is missing; on Windows, install `ffmpeg` for OGG from `render_track` / SF2 (some libsndfile wheels crash encoding Vorbis).
+
+`render_midi.py --mode chip` can still write OGG directly via `soundfile` from the in-memory buffer.
 
 Windows FluidSynth builds often cannot write OGG/Vorbis directly (`-T ogg` / filename `.ogg`). nobu does not rely on that path. Note: FluidSynth `-O` sets **sample format** (`s16`, `float`, …), not the file container.
 
@@ -178,7 +180,7 @@ nobu and this skill ship **no game-specific data**. Your game (or `examples/demo
 | Server does not appear | Absolute path in JSON; `python` on PATH |
 | Tools fail on import | `pip install -r requirements.txt` |
 | Empty MIDI folder after compose | Check `NOBU_MIDI_DIR` / default `assets/midi` |
-| No OGG | Install `soundfile` / FluidSynth / ffmpeg as needed |
+| No OGG (WAV only) | Install `ffmpeg` (Windows) or ensure `soundfile` Vorbis works; FluidSynth alone does not write OGG here |
 
 ---
 
@@ -229,9 +231,10 @@ Rode `python scripts/bootstrap.py` ou copie `.kilo/kilo.example.jsonc`.
 
 ```bash
 python examples/demo_biome_ost.py
-python scripts/render_midi.py
+python scripts/render_midi.py --mode chip
 ```
 
-MIDI em `assets/midi/` → OGG/WAV em `output/audio/`.
+MIDI em `assets/midi/` → OGG/WAV em `output/audio/`.  
+SF2: FluidSynth → WAV → OGG (`ffmpeg` no Windows). Detalhes na seção EN acima.
 
 O nobu é **game-agnostic** — não sabe nada do seu jogo; tônica e mood vêm do caller.

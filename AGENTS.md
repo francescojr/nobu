@@ -91,7 +91,7 @@ python scripts/render_track.py path.mid --mode hybrid
 python scripts/render_midi.py --mode sf2 --soundfont assets/soundfonts/default.sf2
 ```
 
-Full SF2 always renders **WAV via FluidSynth**, then converts to OGG with `ffmpeg` when available (or `soundfile` as fallback). Do not pass FluidSynth `-O s3m` — `-O` is sample format (`s16`/`float`), not an OGG container, and many Windows builds cannot write Vorbis at all.
+Full SF2 always renders **WAV via FluidSynth**, then converts to OGG with `ffmpeg` when available (on non-Windows, `soundfile` may convert WAV→OGG if ffmpeg is missing). Do not pass FluidSynth `-O s3m` — `-O` is sample format (`s16`/`float`), not an OGG container, and many Windows builds cannot write Vorbis at all.
 
 Never treat missing SF2 as a fatal error — fall back and tell the user.
 
@@ -118,6 +118,7 @@ Prefer delivering a real `.mid` under `assets/midi/` over text-only description.
 - **sessionStart** — git baseline only (never bumps version)
 - **stop** — when the agent finishes a turn → SemVer bump once per conversation
 - **sessionEnd** — fallback bump if the chat ends without a prior `stop`
+- **`loop_limit`** — must be a positive integer or `null` (`0` invalidates the whole hooks file)
 
 Do not reintroduce an Unreleased section. Edit version bullets by hand if the auto summary is too noisy.
 

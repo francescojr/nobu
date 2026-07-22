@@ -17,6 +17,8 @@ meaningful changes cuts a new `MAJOR.MINOR.PATCH` entry (via Cursor hooks).
   (Windows-safe); validate file size / FluidSynth stderr even when exit is 0
 - `render_midi` SF2/auto path delegates to `render_track` so both share one
   FluidSynth → WAV → OGG implementation
+- Cursor project hooks failed to load: `loop_limit: 0` is invalid — use `null`
+  (or a positive integer). Log showed the entire `.cursor/hooks.json` rejected
 
 ### Changed
 
@@ -24,8 +26,9 @@ meaningful changes cuts a new `MAJOR.MINOR.PATCH` entry (via Cursor hooks).
   Windows libsndfile Vorbis crashes that left ~4 KB stub files)
 - Bootstrap `--json` reports optional render health: `fluidsynth`, `ffmpeg`,
   `sf2_found`, `tinysoundfont` (does not affect `ok`)
-- Docs (AGENTS / SETUP / soundfonts README) clarify FluidSynth `-O` vs `-T`
-  and the WAV→OGG path on Windows
+- Docs (README / AGENTS / SETUP / CONTRIBUTING / requirements / mcp-integration
+  / soundfonts README) aligned with WAV→OGG path, ffmpeg on Windows, and the
+  hooks `loop_limit` gotcha
 
 ### Added
 

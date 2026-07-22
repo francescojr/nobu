@@ -53,7 +53,9 @@ Project hooks in [`.cursor/hooks.json`](.cursor/hooks.json) run:
 | `stop` / `sessionEnd` | Classifies diffs, bumps SemVer (`patch` / `minor` / `major`), prepends `## [X.Y.Z]` (once per session) |
 
 Script: [`.cursor/hooks/update_changelog_session.py`](.cursor/hooks/update_changelog_session.py).  
-Enable Hooks in Cursor settings if inactive.
+Enable Hooks in Cursor settings if inactive. Check **Output → Hooks** if versions never bump.
+
+**Config gotcha:** in `.cursor/hooks.json`, `loop_limit` must be a **positive integer** or `null` (no limit). `0` is invalid and Cursor rejects the **entire** project hooks file (nothing runs).
 
 **Note:** auto-versioning stays idle until the repo has at least one git commit.
 

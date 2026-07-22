@@ -17,7 +17,7 @@
       {
         "command": "python .cursor/hooks/update_changelog_session.py stop",
         "timeout": 60,
-        "loop_limit": 0
+        "loop_limit": null
       }
     ]
   }

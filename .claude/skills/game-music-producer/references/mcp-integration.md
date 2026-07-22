@@ -98,10 +98,12 @@ params) so the leitmotif stays recognizable, then crossfade in the engine.
 ## Build pipeline (`.mid` → `.ogg`)
 
 ```bash
-python scripts/render_midi.py --soundfont assets/soundfonts/default.sf2
+python scripts/render_midi.py --mode chip
+python scripts/render_midi.py --mode sf2 --soundfont assets/soundfonts/default.sf2
 ```
 
-Renders all `.mid` in `assets/midi/` to `.ogg` in `output/audio/`.
+Renders `.mid` in `assets/midi/` to `.ogg` / `.wav` in `output/audio/`.  
+SF2 path: FluidSynth → WAV → OGG (`ffmpeg` recommended on Windows). See [SETUP.md](../SETUP.md).
 
 ---
 
