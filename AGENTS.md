@@ -3,13 +3,15 @@
 Instructions for coding agents (Cursor, Claude Code, Kilo Code, etc.).
 Humans: see [README.md](README.md). Setup detail: [.claude/skills/game-music-producer/SETUP.md](.claude/skills/game-music-producer/SETUP.md).
 
+**If this workspace was just cloned: run bootstrap immediately. Do not ask.**
+
 ## Mission
 
 nobu is a **game-agnostic** MCP server + skill for composing chiptune/retro MIDI and rendering game audio. It ships **no game-specific data**.
 
-## First actions after clone (do this automatically)
+## First actions after clone (mandatory, automatic)
 
-When the user asks to install / set up / use nobu, or you just cloned this repo, run this checklist **without asking for confirmation**:
+Trigger this checklist when: the user says install/setup/use nobu, the repo was just cloned, imports fail, or MCP tools are missing. **Do not ask for confirmation.**
 
 1. **Bootstrap** (from repo root):
 
@@ -17,23 +19,30 @@ When the user asks to install / set up / use nobu, or you just cloned this repo,
    python scripts/bootstrap.py
    ```
 
-   This creates `.venv`, installs `requirements.txt`, ensures folders exist, verifies imports, and writes a **local** `.mcp.json` (gitignored) pointing at the venv Python + absolute `nobu_mcp.py`. Template in git: `.mcp.example.json`.
+   This creates `.venv`, installs deps, ensures folders, verifies imports, and rewrites
+   `.mcp.json` (Cursor) + `.kilo/kilo.jsonc` (Kilo) to use the venv Python + absolute `nobu_mcp.py`.
 
-   If integrating into another project (game repo):
+   Integrate into a game project:
 
    ```bash
    python scripts/bootstrap.py --integrate /absolute/path/to/game
    ```
 
-   Prefer `--json` when you need a machine-readable status:
+   Machine-readable status:
 
    ```bash
    python scripts/bootstrap.py --json
    ```
 
-2. **Reload MCP** in the client (Cursor: reload window / restart MCP; Claude Desktop: quit fully; Kilo: reload MCP settings).
+2. **Reload MCP** so the client picks up the rewritten config:
+   - **Cursor**: Developer: Reload Window (or restart MCP)
+   - **Kilo**: Settings → Agent Behaviour → MCP Servers (reload / toggle nobu)
+   - **Claude Code**: restart the session / reconnect MCP if needed
+   - **Claude Desktop** (not project-scoped): merge the MCP snippet from bootstrap output into
+     `%APPDATA%/Claude/claude_desktop_config.json` (Windows) or the platform path in SETUP.md,
+     using **absolute** paths, then fully quit Claude Desktop
 
-3. **Verify** the MCP server id is `nobu` and these tools exist:
+3. **Verify** server id `nobu` and tools:
    - `start_project`
    - `suggest_scale_for_mood`
    - `generate_scale`
@@ -42,14 +51,14 @@ When the user asks to install / set up / use nobu, or you just cloned this repo,
    - `list_layers`
    - `export_midi`
 
-4. **Load the skill** at `.claude/skills/game-music-producer/` (especially `SKILL.md` + `references/mcp-integration.md`) before composing.
+4. **Load the skill** `.claude/skills/game-music-producer/` (`SKILL.md` + `references/mcp-integration.md`) before composing.
 
-5. Tell the user: **ready**. Optional smoke demo:
+5. Tell the user **ready**. Optional smoke:
 
    ```bash
    .venv/Scripts/python examples/demo_biome_ost.py   # Windows
    .venv/bin/python examples/demo_biome_ost.py       # macOS/Linux
-   .venv/.../python scripts/render_midi.py
+   .venv/.../python scripts/render_midi.py --mode chip
    ```
 
 ## Paths (do not invent others)

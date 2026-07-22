@@ -1,0 +1,21 @@
+// Portable Kilo Code (v7+) project config for nobu.
+// Copy to .kilo/kilo.jsonc or run: python scripts/bootstrap.py
+// Docs: https://kilo.ai/docs/automate/mcp/using-in-kilo-code
+{
+  "instructions": [
+    "AGENTS.md",
+    "CLAUDE.md",
+    ".claude/skills/game-music-producer/SKILL.md",
+    ".kilo/rules/nobu.md"
+  ],
+  "mcp": {
+    "nobu": {
+      "type": "local",
+      // Prefer absolute paths after bootstrap (venv python + nobu_mcp.py).
+      // Replace these placeholders or let scripts/bootstrap.py rewrite kilo.jsonc.
+      "command": ["python", "nobu_mcp.py"],
+      "enabled": true,
+      "timeout": 30000
+    }
+  }
+}

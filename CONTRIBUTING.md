@@ -57,6 +57,14 @@ Enable Hooks in Cursor settings if inactive.
 
 **Note:** auto-versioning stays idle until the repo has at least one git commit.
 
+### MCP configs after bootstrap
+
+`scripts/bootstrap.py` rewrites `.mcp.json` and `.kilo/kilo.jsonc` with **absolute venv paths** for this machine. Before committing, restore the portable versions if those files are dirty:
+
+```bash
+git checkout -- .mcp.json .kilo/kilo.jsonc
+```
+
 ### Code of conduct
 
 By participating, you agree to follow [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).

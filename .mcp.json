@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "nobu": {
+      "command": "python",
+      "args": ["${workspaceFolder}/nobu_mcp.py"]
+    }
+  }
+}

@@ -20,13 +20,19 @@ nobu ships **no game-specific data**. Your project supplies tonic, mood, and bio
 
 ---
 
-## Paste this to your agent
+## Agent-ready?
 
-Copy/paste into Cursor, Claude, or Kilo — the agent should finish setup alone:
+**Cursor / Claude Code / Kilo (opened on this repo):** yes — after clone the agent should read `AGENTS.md` / `CLAUDE.md`, run `python scripts/bootstrap.py`, reload MCP, and be ready. Project configs ship in-repo (`.mcp.json`, `.kilo/kilo.jsonc`, `.cursor/rules`, `.claude/skills`).
+
+**Claude Desktop:** almost — same bootstrap, but the agent must also merge the MCP snippet into the **global** `claude_desktop_config.json` (Desktop does not auto-load project `.mcp.json`).
+
+**Not magic:** `python` must be on PATH; the user must open the cloned folder (or point MCP at it); one reload after bootstrap is required.
+
+## Paste this to your agent
 
 ```text
 Clone https://github.com/francescojr/nobu.git (sibling folder or into this workspace).
-Read nobu/AGENTS.md and run: python scripts/bootstrap.py
+Read AGENTS.md (and CLAUDE.md if present) and run: python scripts/bootstrap.py
 If this is a game project, also run: python scripts/bootstrap.py --integrate <this_project_root>
 Reload MCP, confirm server "nobu" has start_project / add_layer / export_midi.
 Then follow .claude/skills/game-music-producer/ and compose when I ask.
@@ -40,7 +46,7 @@ Clone it next to this repo, run python scripts/bootstrap.py --integrate <absolut
 reload MCP, and confirm tools work. Do not hardcode our game data into nobu.
 ```
 
-Agents follow [AGENTS.md](AGENTS.md). Bootstrap writes a local `.mcp.json` with absolute venv paths (see `.mcp.example.json` for the portable template).
+Agents follow [AGENTS.md](AGENTS.md). Bootstrap rewrites `.mcp.json` + `.kilo/kilo.jsonc` to the local venv.
 
 ---
 
@@ -86,7 +92,8 @@ python scripts/render_track.py assets/midi/biome1_calm.mid --mode hybrid
 |---|---|
 | `nobu_mcp.py` | MCP server entrypoint (`FastMCP("nobu")`) |
 | `AGENTS.md` | Checklist agents run after clone |
-| `scripts/bootstrap.py` | One-shot setup (venv, deps, `.mcp.json`) |
+| `scripts/bootstrap.py` | One-shot setup (venv, deps, Cursor `.mcp.json` + Kilo `.kilo/kilo.jsonc`) |
+| `.kilo/` | Kilo Code v7+ config (`kilo.example.jsonc`, `rules/nobu.md`) |
 | `assets/midi/` | Generated / authored `.mid` files |
 | `assets/soundfonts/` | Your `.sf2` files (not vendored — see README there) |
 | `output/audio/` | Rendered `.ogg` / `.wav` |

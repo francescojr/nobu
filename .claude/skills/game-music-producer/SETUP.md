@@ -91,22 +91,42 @@ Edit (or create) the Claude Desktop config:
 }
 ```
 
-### 5. Kilo Code / VS Code MCP
+### 5. Kilo Code (v7+)
 
-Add to workspace or user MCP settings (same shape as Claude Desktop):
+Kilo uses [`.kilo/kilo.jsonc`](../../../.kilo/kilo.example.jsonc) (not Claude’s `mcpServers` shape).
+See [Using MCP in Kilo Code](https://kilo.ai/docs/automate/mcp/using-in-kilo-code).
 
-```json
+**Recommended:** from the repo root run `python scripts/bootstrap.py` — it writes
+`.kilo/kilo.jsonc` with absolute venv Python + `nobu_mcp.py`, plus loads
+`AGENTS.md` / the skill via `instructions`.
+
+Template checked into git: `.kilo/kilo.example.jsonc`. Local generated file is gitignored.
+
+Manual example (replace paths with absolutes from your machine):
+
+```jsonc
 {
-  "mcpServers": {
+  "instructions": [
+    "AGENTS.md",
+    ".claude/skills/game-music-producer/SKILL.md",
+    ".kilo/rules/nobu.md"
+  ],
+  "mcp": {
     "nobu": {
-      "command": "python",
-      "args": ["/absolute/path/to/nobu/nobu_mcp.py"]
+      "type": "local",
+      "command": [
+        "C:/path/to/nobu/.venv/Scripts/python.exe",
+        "C:/path/to/nobu/nobu_mcp.py"
+      ],
+      "enabled": true,
+      "timeout": 30000
     }
   }
 }
 ```
 
-On macOS/Linux prefer `python3` if `python` is not on PATH.
+Then: Settings → Agent Behaviour → MCP Servers → confirm **nobu** is enabled.
+Also supported: global `~/.config/kilo/kilo.jsonc` (Windows: `%USERPROFILE%\.config\kilo\kilo.jsonc`).
 
 ### 6. Restart & verify
 
@@ -190,9 +210,14 @@ pip install -r requirements.txt
 
 O repo já inclui `.mcp.json` com o servidor `nobu`. Se `${workspaceFolder}` não for expandido, use caminho absoluto para `nobu_mcp.py`.
 
-### Claude Desktop / Kilo Code
+### Claude Desktop
 
-Mesmo JSON — chave `"nobu"`, `command: "python"`, `args` com caminho **absoluto** para `nobu_mcp.py`. Reinicie o cliente.
+JSON clássico `mcpServers` com caminho absoluto para `nobu_mcp.py`.
+
+### Kilo Code
+
+Formato v7 em `.kilo/kilo.jsonc` (`mcp.nobu.type: "local"`, `command: [python, nobu_mcp.py]`).
+Rode `python scripts/bootstrap.py` ou copie `.kilo/kilo.example.jsonc`.
 
 ### Tools (inglês)
 
