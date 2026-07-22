@@ -40,6 +40,7 @@ SKIP_PATH_PREFIXES = (
 
 SKIP_EXACT = {
     "CHANGELOG.md",  # avoid self-trigger loops when only changelog touched later
+    "pyproject.toml",  # version sync is the release itself, not a bullet
 }
 
 SECTION_ORDER = (
@@ -83,9 +84,32 @@ def is_git_repo() -> bool:
     return bool(git("rev-parse", "--is-inside-work-tree"))
 
 
+LAST_SESSION_PATH = STATE_DIR / "last_session.json"
+
+
 def session_state_path(session_id: str) -> Path:
     safe = re.sub(r"[^\w.-]+", "_", session_id or "unknown")
     return STATE_DIR / f"{safe}.json"
+
+
+def resolve_session_id(payload: dict) -> str:
+    """Prefer Cursor ids; fall back to last sessionStart (stop often omits ids)."""
+    for key in ("session_id", "conversation_id", "composer_id"):
+        val = payload.get(key)
+        if isinstance(val, str) and val.strip():
+            return val.strip()
+    env = os.environ.get("NOBU_SESSION_ID")
+    if env and env.strip():
+        return env.strip()
+    if LAST_SESSION_PATH.exists():
+        try:
+            data = json.loads(LAST_SESSION_PATH.read_text(encoding="utf-8"))
+            sid = data.get("session_id")
+            if isinstance(sid, str) and sid.strip():
+                return sid.strip()
+        except (json.JSONDecodeError, OSError):
+            pass
+    return "unknown"
 
 
 def load_state(session_id: str) -> dict:
@@ -102,6 +126,10 @@ def save_state(session_id: str, data: dict) -> None:
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     session_state_path(session_id).write_text(
         json.dumps(data, indent=2) + "\n", encoding="utf-8"
+    )
+    LAST_SESSION_PATH.write_text(
+        json.dumps({"session_id": session_id}, indent=2) + "\n",
+        encoding="utf-8",
     )
 
 
@@ -281,6 +309,48 @@ def bump_version(current: str, kind: str) -> str:
     return f"{major}.{minor}.{patch + 1}"
 
 
+def parse_semver(version: str) -> tuple[int, int, int]:
+    major, minor, patch = version.split(".")
+    return int(major), int(minor), int(patch)
+
+
+def version_gt(left: str, right: str) -> bool:
+    return parse_semver(left) > parse_semver(right)
+
+
+def latest_changelog_version() -> str | None:
+    if not CHANGELOG.exists():
+        return None
+    match = re.search(
+        r"^## \[(\d+\.\d+\.\d+)\]",
+        CHANGELOG.read_text(encoding="utf-8"),
+        re.M,
+    )
+    return match.group(1) if match else None
+
+
+def pyproject_version_at(ref: str | None) -> str | None:
+    if not ref:
+        return None
+    text = git("show", f"{ref}:pyproject.toml")
+    if not text:
+        return None
+    match = re.search(r'^version\s*=\s*"(\d+\.\d+\.\d+)"', text, re.M)
+    return match.group(1) if match else None
+
+
+def agent_already_cut_release(baseline: str | None) -> bool:
+    """Skip auto-bump when the agent already wrote matching CHANGELOG + version."""
+    top = latest_changelog_version()
+    current = read_pyproject_version()
+    if not top or top != current:
+        return False
+    base = pyproject_version_at(baseline)
+    if base is None:
+        return False
+    return version_gt(top, base)
+
+
 def empty_buckets() -> dict[str, list[str]]:
     return {s: [] for s in SECTION_ORDER}
 
@@ -353,12 +423,9 @@ def cut_version(
     current = read_pyproject_version()
     new_version = bump_version(current, bump_kind)
     today = date.today().isoformat()
-    sid = session_id[:8] + "…" if len(session_id) > 8 else session_id
 
     lines = [
         f"## [{new_version}] — {today}",
-        "",
-        f"_Auto-release from session `{sid}` ({bump_kind})._",
         "",
     ]
     for s in SECTION_ORDER:
@@ -378,16 +445,12 @@ def cut_version(
 
     CHANGELOG.write_text(new_text, encoding="utf-8")
     write_pyproject_version(new_version)
-    log(f"versioned {current} → {new_version} ({bump_kind})")
+    log(f"versioned {current} → {new_version} ({bump_kind}, session={session_id})")
     return new_version
 
 
 def handle_session_start(payload: dict) -> dict:
-    session_id = (
-        payload.get("session_id")
-        or payload.get("conversation_id")
-        or "unknown"
-    )
+    session_id = resolve_session_id(payload)
     baseline = git("rev-parse", "HEAD") or None
     save_state(
         session_id,
@@ -400,7 +463,7 @@ def handle_session_start(payload: dict) -> dict:
             "composer_mode": payload.get("composer_mode"),
         },
     )
-    log(f"sessionStart baseline={baseline}")
+    log(f"sessionStart baseline={baseline} session={session_id}")
     return {
         "env": {
             "NOBU_SESSION_ID": session_id,
@@ -430,12 +493,7 @@ def _collect_session_buckets(
 
 
 def handle_finalize(payload: dict, event: str) -> dict:
-    session_id = (
-        payload.get("session_id")
-        or payload.get("conversation_id")
-        or os.environ.get("NOBU_SESSION_ID")
-        or "unknown"
-    )
+    session_id = resolve_session_id(payload)
     state = load_state(session_id)
     if state.get("finalized"):
         log(f"{event}: already versioned for session — skip")
@@ -459,6 +517,16 @@ def handle_finalize(payload: dict, event: str) -> dict:
     baseline = state.get("baseline") or os.environ.get("NOBU_SESSION_BASELINE") or None
     if baseline == "":
         baseline = None
+
+    if agent_already_cut_release(baseline):
+        log(
+            f"{event}: agent already cut "
+            f"{latest_changelog_version()} — skip auto-bump"
+        )
+        state["finalized"] = True
+        state["pending"] = empty_buckets()
+        save_state(session_id, state)
+        return {}
 
     merged, bump_kind, paths = _collect_session_buckets(state, baseline)
 

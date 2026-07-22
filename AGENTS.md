@@ -118,6 +118,8 @@ Prefer delivering a real `.mid` under `assets/midi/` over text-only description.
 - **sessionStart** — git baseline only (never bumps version)
 - **stop** — when the agent finishes a turn → SemVer bump once per conversation
 - **sessionEnd** — fallback bump if the chat ends without a prior `stop`
+- **Skip** if the agent already wrote a matching top CHANGELOG version +
+  `pyproject.toml` (avoids double patch with generic “Updated …” bullets)
 - **`loop_limit`** — must be a positive integer or `null` (`0` invalidates the whole hooks file)
 
 Do not reintroduce an Unreleased section. Edit version bullets by hand if the auto summary is too noisy.

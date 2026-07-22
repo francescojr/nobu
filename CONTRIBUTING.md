@@ -55,6 +55,8 @@ Project hooks in [`.cursor/hooks.json`](.cursor/hooks.json) run:
 Script: [`.cursor/hooks/update_changelog_session.py`](.cursor/hooks/update_changelog_session.py).  
 Enable Hooks in Cursor settings if inactive. Check **Output → Hooks** if versions never bump.
 
+If the agent already wrote a matching top `CHANGELOG` entry + `pyproject.toml` version, the hook **skips** (no second junk patch). Edit noisy auto bullets by hand when needed.
+
 **Config gotcha:** in `.cursor/hooks.json`, `loop_limit` must be a **positive integer** or `null` (no limit). `0` is invalid and Cursor rejects the **entire** project hooks file (nothing runs).
 
 **Note:** auto-versioning stays idle until the repo has at least one git commit.
