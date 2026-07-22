@@ -16,10 +16,11 @@ build/
 .DS_Store
 Thumbs.db
 
-# Cursor hook session state + machine-local MCP (absolute venv paths)
+# Cursor hook session state + machine-local MCP/Kilo (absolute venv paths)
 .cursor/hooks/state/
 .cursor/mcp.json
 .mcp.json
+.kilo/kilo.jsonc
 
 # Generated audio / local soundfonts (keep directory placeholders)
 assets/midi/*.mid
@@ -29,3 +30,7 @@ output/audio/*
 !output/audio/.gitkeep
 !assets/midi/.gitkeep
 !assets/soundfonts/README.md
+
+# Local audit clones (never commit)
+.audit-clone/
+

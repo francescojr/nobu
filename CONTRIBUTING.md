@@ -59,14 +59,15 @@ Enable Hooks in Cursor settings if inactive.
 
 ### MCP configs after bootstrap
 
-`scripts/bootstrap.py` rewrites machine-local MCP configs with **absolute venv paths**:
+`scripts/bootstrap.py` rewrites machine-local configs with **absolute venv paths**.
+Those files are **gitignored** — `git add -A` will not stage them:
 
-- `.cursor/mcp.json` and `.mcp.json` — **gitignored** (never commit; template is `.mcp.example.json`)
-- `.kilo/kilo.jsonc` — still tracked; restore portable defaults before committing if dirty:
+| Generated (local only) | Portable template in git |
+|---|---|
+| `.cursor/mcp.json`, `.mcp.json` | `.mcp.example.json` |
+| `.kilo/kilo.jsonc` | `.kilo/kilo.example.jsonc` |
 
-```bash
-git checkout -- .kilo/kilo.jsonc
-```
+Clones get working MCP/Kilo after `python scripts/bootstrap.py` (mandatory; see AGENTS.md).
 
 ### Code of conduct
 

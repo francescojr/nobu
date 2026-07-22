@@ -20,7 +20,8 @@ Trigger this checklist when: the user says install/setup/use nobu, the repo was 
    ```
 
    This creates `.venv`, installs deps, ensures folders, verifies imports, and rewrites
-   `.mcp.json` (Cursor) + `.kilo/kilo.jsonc` (Kilo) to use the venv Python + absolute `nobu_mcp.py`.
+   project-local `.cursor/mcp.json` + `.mcp.json` (Cursor) and `.kilo/kilo.jsonc` (Kilo)
+   with the venv Python + absolute `nobu_mcp.py` (all gitignored; templates `*.example*` stay in git).
 
    Integrate into a game project:
 

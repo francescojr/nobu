@@ -22,7 +22,7 @@ nobu ships **no game-specific data**. Your project supplies tonic, mood, and bio
 
 ## Agent-ready?
 
-**Cursor / Claude Code / Kilo (opened on this repo):** yes — after clone the agent should read `AGENTS.md` / `CLAUDE.md`, run `python scripts/bootstrap.py`, reload MCP, and be ready. Project configs ship in-repo (`.cursor/mcp.json`, `.mcp.json`, `.kilo/kilo.jsonc`, `.cursor/rules`, `.claude/skills`).
+**Cursor / Claude Code / Kilo (opened on this repo):** yes — after clone the agent should read `AGENTS.md` / `CLAUDE.md`, run `python scripts/bootstrap.py`, reload MCP, and be ready. Rules/skills ship in-repo (`.cursor/rules`, `.claude/skills`); MCP/Kilo configs are **generated locally** by bootstrap (templates: `.mcp.example.json`, `.kilo/kilo.example.jsonc`).
 
 **Cursor caveat:** new project MCP servers start **disabled** (Cursor security). After bootstrap + reload, toggle **nobu** on once under Settings → MCP (or Customize → MCP). Stays on for that workspace afterward — we cannot force-enable from the repo.
 
