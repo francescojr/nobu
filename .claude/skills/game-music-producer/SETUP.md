@@ -39,7 +39,9 @@ For richer `.mid` → `.ogg` rendering:
 # Linux:    apt install fluidsynth
 ```
 
-`ffmpeg` is required only for `scripts/render_track.py` (WAV → OGG).
+Full SF2 mode always does **FluidSynth → WAV**, then converts to OGG with `ffmpeg` when available (`soundfile` is a fallback). Chip/hybrid write OGG from the in-memory buffer via `soundfile` when possible.
+
+Windows FluidSynth builds often cannot write OGG/Vorbis directly (`-T ogg` / filename `.ogg`). nobu does not rely on that path. Note: FluidSynth `-O` sets **sample format** (`s16`, `float`, …), not the file container.
 
 ### 2. Folder layout
 

@@ -110,6 +110,28 @@ def verify_imports() -> dict[str, bool]:
     return results
 
 
+def optional_render_health() -> dict:
+    """Non-fatal extras for SF2/OGG pipeline (never flips report ok)."""
+    sf2 = REPO_ROOT / "assets" / "soundfonts" / "default.sf2"
+    env_sf2 = os.environ.get("NOBU_SF2") or os.environ.get("FLUID_SYNTH_SF2")
+    sf2_found = sf2.exists() or bool(env_sf2 and Path(env_sf2).exists())
+    tsf = False
+    py = venv_python()
+    if py.exists():
+        r = subprocess.run(
+            [str(py), "-c", "import tinysoundfont"],
+            capture_output=True,
+            text=True,
+        )
+        tsf = r.returncode == 0
+    return {
+        "fluidsynth": shutil.which("fluidsynth") is not None,
+        "ffmpeg": shutil.which("ffmpeg") is not None,
+        "sf2_found": sf2_found,
+        "tinysoundfont": tsf,
+    }
+
+
 def mcp_server_entry() -> dict:
     """Cursor / Claude Desktop shape: command + args."""
     py = venv_python()
@@ -254,6 +276,11 @@ def print_human(report: dict) -> None:
     print("Imports:")
     for name, ok in report["imports"].items():
         print(f"  {'OK' if ok else 'FAIL':4} {name}")
+    opt = report.get("optional_render") or {}
+    if opt:
+        print("Optional render:")
+        for name, ok in opt.items():
+            print(f"  {'yes' if ok else 'no':4} {name}")
     print()
     print("Cursor project MCP (.cursor/mcp.json):")
     print(json.dumps(report["mcp_config"], indent=2))
@@ -332,6 +359,7 @@ def main() -> None:
         "venv_created": venv_created,
         "dirs_created": dirs_created,
         "imports": imports,
+        "optional_render": optional_render_health(),
         "mcp_config": mcp_config_snippet(),
         "cursor_mcp_path": cursor_mcp_path,
         "kilo_config": kilo_config_snippet() if venv_python().exists() else None,

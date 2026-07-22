@@ -91,6 +91,8 @@ python scripts/render_track.py path.mid --mode hybrid
 python scripts/render_midi.py --mode sf2 --soundfont assets/soundfonts/default.sf2
 ```
 
+Full SF2 always renders **WAV via FluidSynth**, then converts to OGG with `ffmpeg` when available (or `soundfile` as fallback). Do not pass FluidSynth `-O s3m` — `-O` is sample format (`s16`/`float`), not an OGG container, and many Windows builds cannot write Vorbis at all.
+
 Never treat missing SF2 as a fatal error — fall back and tell the user.
 
 ## Compose workflow (when user asks for music)

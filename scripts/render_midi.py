@@ -590,25 +590,8 @@ def has_fluidsynth() -> bool:
 
 
 def render_fluidsynth(midi_path: Path, soundfont: str) -> bool:
-    """Render via FluidSynth CLI. Returns True on success."""
-    import subprocess
-    out_path = OUT_DIR / f"{midi_path.stem}.ogg"
-
-    cmd = [
-        "fluidsynth", "-ni", soundfont, str(midi_path),
-        "-F", str(out_path), "-O", "s3m",
-        "-r", str(SAMPLE_RATE), "-R", "0", "-g", "1.5",
-    ]
-    try:
-        subprocess.run(cmd, check=True, capture_output=True, text=True, timeout=60)
-        size_kb = os.path.getsize(out_path) / 1024
-        print(f"    -> {out_path.name} ({size_kb:.0f} KB) [FluidSynth]")
-        return True
-    except FileNotFoundError:
-        return False
-    except subprocess.CalledProcessError as e:
-        print(f"    X FluidSynth error: {e.stderr[:150]}")
-        return False
+    """Full SF2 via render_track (WAV then OGG). Single shared implementation."""
+    return render_via_track_script(midi_path, "sf2", soundfont)
 
 
 # =======================================================================

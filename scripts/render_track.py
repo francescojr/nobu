@@ -30,6 +30,8 @@ import mido
 
 SAMPLE_RATE = 44100
 CHIP_SR = 22050
+# FluidSynth on Windows can exit 0 while writing nothing / a stub — reject tiny files.
+MIN_AUDIO_BYTES = 8192
 
 ROOT = Path(__file__).resolve().parent.parent
 MIDI_DIR = Path(os.environ.get("NOBU_MIDI_DIR", str(ROOT / "assets" / "midi")))
@@ -411,6 +413,74 @@ def mix_down(drums: np.ndarray, melodic: np.ndarray) -> np.ndarray:
     return mixed
 
 
+def wav_to_ogg(wav_path: str, ogg_path: str) -> bool:
+    """Convert WAV → OGG. Prefer ffmpeg (stable on Windows); soundfile as fallback.
+
+    Note: some Windows libsndfile builds crash or write tiny stubs when encoding
+    large WAVs to Vorbis via soundfile — always validate size.
+    """
+    # Remove any previous stub so callers do not keep a bad OGG.
+    if os.path.isfile(ogg_path) and os.path.getsize(ogg_path) < MIN_AUDIO_BYTES:
+        try:
+            os.remove(ogg_path)
+        except OSError:
+            pass
+
+    ffmpeg = shutil.which("ffmpeg")
+    if ffmpeg:
+        try:
+            subprocess.run(
+                [
+                    ffmpeg,
+                    "-y",
+                    "-loglevel",
+                    "error",
+                    "-i",
+                    wav_path,
+                    "-c:a",
+                    "libvorbis",
+                    "-q:a",
+                    "5",
+                    ogg_path,
+                ],
+                check=True,
+                timeout=120,
+            )
+            if os.path.isfile(ogg_path) and os.path.getsize(ogg_path) >= MIN_AUDIO_BYTES:
+                print(
+                    f"OGG: {ogg_path} ({os.path.getsize(ogg_path) / 1024:.0f} KB) [ffmpeg]"
+                )
+                return True
+        except Exception as e:
+            print(f"  (ffmpeg OGG skip: {e})")
+
+    # File-based Vorbis encode via soundfile can AV on some Windows wheels.
+    if sys.platform == "win32":
+        print("  (OGG skipped — install ffmpeg for WAV→OGG on Windows)")
+        return False
+
+    try:
+        import soundfile as sf
+
+        data, rate = sf.read(wav_path)
+        sf.write(ogg_path, data, rate, format="OGG", subtype="VORBIS")
+        if os.path.isfile(ogg_path) and os.path.getsize(ogg_path) >= MIN_AUDIO_BYTES:
+            print(
+                f"OGG: {ogg_path} ({os.path.getsize(ogg_path) / 1024:.0f} KB) [soundfile]"
+            )
+            return True
+        if os.path.isfile(ogg_path):
+            try:
+                os.remove(ogg_path)
+            except OSError:
+                pass
+    except Exception as e:
+        print(f"  (soundfile OGG skip: {e})")
+
+    print("  (OGG skipped — install ffmpeg or soundfile with Vorbis)")
+    return False
+
+
 def write_output(
     mixed: np.ndarray, out_base: str, loop_beats: float = 0, bpm: float = 152
 ) -> None:
@@ -423,70 +493,38 @@ def write_output(
 
     os.makedirs(os.path.dirname(out_base) or ".", exist_ok=True)
     wav_path = out_base + ".wav"
+    ogg_path = out_base + ".ogg"
+    # WAV via soundfile is reliable; OGG encode via soundfile crashes on some
+    # Windows libsndfile builds — convert with ffmpeg (wav_to_ogg).
     sf.write(wav_path, mixed, SAMPLE_RATE, subtype="PCM_16")
     print(f"WAV: {wav_path} ({os.path.getsize(wav_path) / 1024:.0f} KB)")
+    wav_to_ogg(wav_path, ogg_path)
 
-    ffmpeg = shutil.which("ffmpeg")
-    if not ffmpeg:
-        print("  (ffmpeg not found — WAV only; OGG skipped)")
-        return
 
-    ogg_path = out_base + ".ogg"
-    try:
-        subprocess.run(
-            [
-                ffmpeg,
-                "-y",
-                "-loglevel",
-                "error",
-                "-i",
-                wav_path,
-                "-c:a",
-                "libvorbis",
-                "-q:a",
-                "5",
-                ogg_path,
-            ],
-            check=True,
-            timeout=60,
-        )
-        print(f"OGG: {ogg_path} ({os.path.getsize(ogg_path) / 1024:.0f} KB)")
-    except Exception as e:
-        print(f"  (OGG skip: {e})")
+def _fluidsynth_output_ok(result: subprocess.CompletedProcess, wav_path: str) -> bool:
+    """FluidSynth often exits 0 even when the requested format failed — verify WAV."""
+    combined = f"{result.stderr or ''}{result.stdout or ''}".lower()
+    if "fluidsynth: error:" in combined:
+        return False
+    if not os.path.isfile(wav_path):
+        return False
+    if os.path.getsize(wav_path) < MIN_AUDIO_BYTES:
+        return False
+    return True
 
 
 # ── full SF2 via FluidSynth ────────────────────────────────────────
 
 
 def render_full_sf2(midi_path: str, sf2_path: str, out_base: str) -> bool:
-    """Render entire MIDI through FluidSynth (all instruments from SF2)."""
+    """Render entire MIDI through FluidSynth → WAV, then convert to OGG.
+
+    Never uses FluidSynth OGG output (-T/-O): Windows builds often lack Vorbis,
+    and -O is sample format (s16/float), not container type.
+    """
     os.makedirs(os.path.dirname(out_base) or ".", exist_ok=True)
     ogg_path = out_base + ".ogg"
     wav_path = out_base + ".wav"
-
-    # Prefer OGG; fall back to WAV then convert
-    cmd_ogg = [
-        "fluidsynth",
-        "-ni",
-        sf2_path,
-        midi_path,
-        "-F",
-        ogg_path,
-        "-O",
-        "s3m",
-        "-r",
-        str(SAMPLE_RATE),
-        "-R",
-        "0",
-        "-g",
-        "1.5",
-    ]
-    try:
-        subprocess.run(cmd_ogg, check=True, capture_output=True, text=True, timeout=90)
-        print(f"OGG: {ogg_path} ({os.path.getsize(ogg_path) / 1024:.0f} KB) [FluidSynth]")
-        return True
-    except (FileNotFoundError, subprocess.CalledProcessError):
-        pass
 
     cmd_wav = [
         "fluidsynth",
@@ -503,32 +541,31 @@ def render_full_sf2(midi_path: str, sf2_path: str, out_base: str) -> bool:
         "1.5",
     ]
     try:
-        subprocess.run(cmd_wav, check=True, capture_output=True, text=True, timeout=90)
-        print(f"WAV: {wav_path} ({os.path.getsize(wav_path) / 1024:.0f} KB) [FluidSynth]")
-        ffmpeg = shutil.which("ffmpeg")
-        if ffmpeg:
-            subprocess.run(
-                [
-                    ffmpeg,
-                    "-y",
-                    "-loglevel",
-                    "error",
-                    "-i",
-                    wav_path,
-                    "-c:a",
-                    "libvorbis",
-                    "-q:a",
-                    "5",
-                    ogg_path,
-                ],
-                check=True,
-                timeout=60,
-            )
-            print(f"OGG: {ogg_path}")
-        return True
-    except Exception as e:
-        print(f"  FluidSynth failed: {e}")
+        result = subprocess.run(
+            cmd_wav, capture_output=True, text=True, timeout=90
+        )
+    except FileNotFoundError:
+        print("  FluidSynth not on PATH")
         return False
+    except subprocess.TimeoutExpired:
+        print("  FluidSynth timed out")
+        return False
+
+    if not _fluidsynth_output_ok(result, wav_path):
+        err = (result.stderr or result.stdout or "").strip()
+        snippet = err[:200] if err else f"exit={result.returncode}, missing/tiny WAV"
+        print(f"  FluidSynth failed: {snippet}")
+        if os.path.isfile(wav_path) and os.path.getsize(wav_path) < MIN_AUDIO_BYTES:
+            try:
+                os.remove(wav_path)
+            except OSError:
+                pass
+        return False
+
+    print(f"WAV: {wav_path} ({os.path.getsize(wav_path) / 1024:.0f} KB) [FluidSynth]")
+    wav_to_ogg(wav_path, ogg_path)
+    # WAV alone is usable audio — treat as success even if OGG conversion failed
+    return True
 
 
 # ── mode resolution ────────────────────────────────────────────────

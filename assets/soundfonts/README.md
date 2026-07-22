@@ -41,7 +41,7 @@ python scripts/render_track.py assets/midi/track.mid --mode hybrid
 ```
 
 Hybrid also needs: `pip install tinysoundfont` (or `pip install "nobu[render]"`).  
-Full SF2 needs the **FluidSynth** CLI on PATH.
+Full SF2 needs the **FluidSynth** CLI on PATH. nobu renders SF2 to WAV, then converts to OGG via `ffmpeg` (recommended on Windows) or `soundfile` elsewhere.
 
 ## Where to get free soundfonts
 
