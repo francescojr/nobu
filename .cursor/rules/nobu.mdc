@@ -1,0 +1,38 @@
+---
+description: nobu MCP toolkit — bootstrap, paths, and compose workflow for agents
+alwaysApply: true
+---
+
+# nobu agent rule
+
+This workspace is **nobu**: game-agnostic MCP for chiptune/retro MIDI + audio render.
+
+## On first use / if deps missing
+
+Run without asking:
+
+```bash
+python scripts/bootstrap.py
+```
+
+Read [AGENTS.md](AGENTS.md) for the full checklist. Prefer `python scripts/bootstrap.py --json` to confirm `"ok": true`.
+
+## Paths
+
+- MIDI → `assets/midi/`
+- SoundFonts → `assets/soundfonts/`
+- Rendered audio → `output/audio/`
+- MCP server id → `nobu` (`nobu_mcp.py`)
+- Skill → `.claude/skills/game-music-producer/`
+
+## When composing music
+
+Use nobu MCP tools in order: `start_project` → `suggest_scale_for_mood` → `add_layer` → `list_layers` → `export_midi`. Deliver real `.mid` files. Follow `references/mcp-integration.md`.
+
+## Integrating into another project
+
+```bash
+python scripts/bootstrap.py --integrate /absolute/path/to/game
+```
+
+Keep nobu game-agnostic — never hardcode a specific game's biomes into the server.

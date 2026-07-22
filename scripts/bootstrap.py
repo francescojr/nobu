@@ -1,0 +1,244 @@
+#!/usr/bin/env python3
+"""
+Idempotent nobu setup. Agents: run this after cloning — no questions needed.
+
+Usage:
+  python scripts/bootstrap.py
+  python scripts/bootstrap.py --json
+  python scripts/bootstrap.py --integrate /path/to/your/game
+
+What it does:
+  1. Checks Python >= 3.10
+  2. Ensures assets/midi, assets/soundfonts, output/audio exist
+  3. Creates .venv if missing
+  4. pip install -r requirements.txt into that venv
+  5. Verifies imports (fastmcp, midiutil, mido, numpy, soundfile)
+  6. Prints MCP config snippet with absolute paths
+  7. With --integrate: merges "nobu" into that project's .mcp.json
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import platform
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+MIN_PY = (3, 10)
+REQUIRED_PKGS = ("fastmcp", "midiutil", "mido", "numpy", "soundfile")
+DIRS = (
+    REPO_ROOT / "assets" / "midi",
+    REPO_ROOT / "assets" / "soundfonts",
+    REPO_ROOT / "output" / "audio",
+)
+
+
+def venv_python() -> Path:
+    if platform.system() == "Windows":
+        return REPO_ROOT / ".venv" / "Scripts" / "python.exe"
+    return REPO_ROOT / ".venv" / "bin" / "python"
+
+
+def venv_pip() -> list[str]:
+    return [str(venv_python()), "-m", "pip"]
+
+
+def ensure_python_version() -> None:
+    if sys.version_info < MIN_PY:
+        raise SystemExit(
+            f"Python {MIN_PY[0]}.{MIN_PY[1]}+ required; "
+            f"found {sys.version_info.major}.{sys.version_info.minor}"
+        )
+
+
+def ensure_dirs() -> list[str]:
+    created = []
+    for d in DIRS:
+        if not d.exists():
+            d.mkdir(parents=True, exist_ok=True)
+            created.append(str(d))
+    return created
+
+
+def ensure_venv() -> bool:
+    py = venv_python()
+    if py.exists():
+        return False
+    subprocess.run(
+        [sys.executable, "-m", "venv", str(REPO_ROOT / ".venv")],
+        check=True,
+    )
+    return True
+
+
+def pip_install() -> None:
+    subprocess.run(
+        [*venv_pip(), "install", "--upgrade", "pip"],
+        check=True,
+        cwd=str(REPO_ROOT),
+    )
+    subprocess.run(
+        [*venv_pip(), "install", "-r", str(REPO_ROOT / "requirements.txt")],
+        check=True,
+        cwd=str(REPO_ROOT),
+    )
+
+
+def verify_imports() -> dict[str, bool]:
+    results = {}
+    py = str(venv_python())
+    for pkg in REQUIRED_PKGS:
+        r = subprocess.run(
+            [py, "-c", f"import {pkg}"],
+            capture_output=True,
+            text=True,
+        )
+        results[pkg] = r.returncode == 0
+    r = subprocess.run(
+        [py, "-c", "import nobu_mcp; print(nobu_mcp.mcp.name)"],
+        capture_output=True,
+        text=True,
+        cwd=str(REPO_ROOT),
+    )
+    results["nobu_mcp"] = r.returncode == 0 and "nobu" in (r.stdout or "")
+    return results
+
+
+def mcp_server_entry() -> dict:
+    py = venv_python()
+    server = REPO_ROOT / "nobu_mcp.py"
+    return {
+        "command": str(py.resolve()),
+        "args": [str(server.resolve())],
+    }
+
+
+def mcp_config_snippet() -> dict:
+    return {"mcpServers": {"nobu": mcp_server_entry()}}
+
+
+def integrate_mcp(target_dir: Path) -> Path:
+    """Merge nobu into target_dir/.mcp.json (absolute paths, venv python)."""
+    target_dir = target_dir.resolve()
+    if not target_dir.is_dir():
+        raise SystemExit(f"Not a directory: {target_dir}")
+
+    mcp_path = target_dir / ".mcp.json"
+    data: dict = {"mcpServers": {}}
+    if mcp_path.exists():
+        try:
+            data = json.loads(mcp_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as e:
+            raise SystemExit(f"Invalid JSON in {mcp_path}: {e}") from e
+        data.setdefault("mcpServers", {})
+
+    data["mcpServers"]["nobu"] = mcp_server_entry()
+    mcp_path.write_text(
+        json.dumps(data, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    return mcp_path
+
+
+def print_human(report: dict) -> None:
+    print("=== nobu bootstrap ===")
+    print(f"Repo:     {report['repo_root']}")
+    print(f"Python:   {report['python']}")
+    print(f"Venv:     {report['venv_python']}")
+    print(f"Created:  {', '.join(report['dirs_created']) or '(none)'}")
+    print(f"Venv new: {report['venv_created']}")
+    print("Imports:")
+    for name, ok in report["imports"].items():
+        print(f"  {'OK' if ok else 'FAIL':4} {name}")
+    print()
+    print("MCP config (paste into Cursor / Claude / Kilo if needed):")
+    print(json.dumps(report["mcp_config"], indent=2))
+    if report.get("integrated_mcp"):
+        print(f"\nIntegrated into: {report['integrated_mcp']}")
+    print()
+    if all(report["imports"].values()):
+        print("Status: READY — restart MCP client / reload window, then use nobu tools.")
+        print("Skill:  .claude/skills/game-music-producer/")
+        print("Compose: ask the agent for a track, or: python examples/demo_biome_ost.py")
+    else:
+        print("Status: INCOMPLETE — fix failed imports and re-run bootstrap.")
+        sys.exit(1)
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Bootstrap nobu for agent/human use")
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Print machine-readable JSON report only",
+    )
+    parser.add_argument(
+        "--integrate",
+        metavar="DIR",
+        help="Merge nobu MCP entry into DIR/.mcp.json (absolute venv + script paths)",
+    )
+    parser.add_argument(
+        "--skip-install",
+        action="store_true",
+        help="Only create dirs / print MCP config (no pip)",
+    )
+    args = parser.parse_args()
+
+    ensure_python_version()
+    dirs_created = ensure_dirs()
+    venv_created = False
+    if not args.skip_install:
+        venv_created = ensure_venv()
+        pip_install()
+        imports = verify_imports()
+    else:
+        imports = {p: False for p in REQUIRED_PKGS}
+        imports["nobu_mcp"] = (REPO_ROOT / "nobu_mcp.py").exists()
+
+    integrated = None
+    if args.integrate:
+        integrated = str(integrate_mcp(Path(args.integrate)))
+
+    # Always write machine-local .mcp.json (gitignored) with absolute venv paths
+    if venv_python().exists():
+        (REPO_ROOT / ".mcp.json").write_text(
+            json.dumps(mcp_config_snippet(), indent=2) + "\n",
+            encoding="utf-8",
+        )
+
+    report = {
+        "ok": all(imports.values()) if not args.skip_install else True,
+        "repo_root": str(REPO_ROOT),
+        "python": sys.version.split()[0],
+        "venv_python": str(venv_python()),
+        "venv_created": venv_created,
+        "dirs_created": dirs_created,
+        "imports": imports,
+        "mcp_config": mcp_config_snippet(),
+        "skill_path": str(
+            REPO_ROOT / ".claude" / "skills" / "game-music-producer"
+        ),
+        "integrated_mcp": integrated,
+        "next_steps": [
+            "Reload MCP / restart Cursor (or Claude Desktop / Kilo Code)",
+            "Confirm server 'nobu' exposes: start_project, suggest_scale_for_mood, add_layer, export_midi",
+            "Read .claude/skills/game-music-producer/SKILL.md when composing",
+            "Optional demo: python examples/demo_biome_ost.py && python scripts/render_midi.py",
+        ],
+    }
+
+    if args.json:
+        print(json.dumps(report, indent=2))
+        if not report["ok"]:
+            sys.exit(1)
+    else:
+        print_human(report)
+
+
+if __name__ == "__main__":
+    main()

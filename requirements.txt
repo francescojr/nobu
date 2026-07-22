@@ -1,0 +1,13 @@
+# Core (MCP compose + render scripts)
+fastmcp>=2.0
+midiutil>=1.2
+mido>=1.3
+numpy>=1.26
+soundfile>=0.12
+
+# Optional: hybrid SF2 drums + chiptune melodic (scripts/render_track.py)
+# tinysoundfont==0.3.7
+
+# System tools (not pip):
+#   FluidSynth  — richer .mid → .ogg via scripts/render_midi.py
+#   ffmpeg      — WAV → OGG in scripts/render_track.py
