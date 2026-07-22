@@ -35,14 +35,16 @@ Trigger this checklist when: the user says install/setup/use nobu, the repo was 
    ```
 
 2. **Reload MCP** so the client picks up the rewritten config:
-   - **Cursor**: Developer: Reload Window (or restart MCP)
+   - **Cursor**: Developer: Reload Window, then **enable `nobu` once** if it shows disabled
+     (Settings → MCP / Customize → MCP). Cursor ships new project servers disabled by design;
+     the repo cannot auto-toggle them. Config is project-only: `.cursor/mcp.json` (never `~/.cursor/mcp.json`).
    - **Kilo**: Settings → Agent Behaviour → MCP Servers (reload / toggle nobu)
    - **Claude Code**: restart the session / reconnect MCP if needed
    - **Claude Desktop** (not project-scoped): merge the MCP snippet from bootstrap output into
      `%APPDATA%/Claude/claude_desktop_config.json` (Windows) or the platform path in SETUP.md,
      using **absolute** paths, then fully quit Claude Desktop
 
-3. **Verify** server id `nobu` and tools:
+3. **Verify** server id `nobu` (Cursor may show `project-*-nobu`) and tools:
    - `start_project`
    - `suggest_scale_for_mood`
    - `generate_scale`
@@ -110,8 +112,9 @@ Prefer delivering a real `.mid` under `assets/midi/` over text-only description.
 `.cursor/hooks.json` auto-versions [CHANGELOG.md](CHANGELOG.md) + `pyproject.toml`:
 
 - **No `[Unreleased]`** — always cut `## [X.Y.Z]`
-- **sessionStart** — git baseline
-- **stop** / **sessionEnd** — SemVer bump (`patch`/`minor`/`major`) once per conversation
+- **sessionStart** — git baseline only (never bumps version)
+- **stop** — when the agent finishes a turn → SemVer bump once per conversation
+- **sessionEnd** — fallback bump if the chat ends without a prior `stop`
 
 Do not reintroduce an Unreleased section. Edit version bullets by hand if the auto summary is too noisy.
 

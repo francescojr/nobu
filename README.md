@@ -22,11 +22,13 @@ nobu ships **no game-specific data**. Your project supplies tonic, mood, and bio
 
 ## Agent-ready?
 
-**Cursor / Claude Code / Kilo (opened on this repo):** yes — after clone the agent should read `AGENTS.md` / `CLAUDE.md`, run `python scripts/bootstrap.py`, reload MCP, and be ready. Project configs ship in-repo (`.mcp.json`, `.kilo/kilo.jsonc`, `.cursor/rules`, `.claude/skills`).
+**Cursor / Claude Code / Kilo (opened on this repo):** yes — after clone the agent should read `AGENTS.md` / `CLAUDE.md`, run `python scripts/bootstrap.py`, reload MCP, and be ready. Project configs ship in-repo (`.cursor/mcp.json`, `.mcp.json`, `.kilo/kilo.jsonc`, `.cursor/rules`, `.claude/skills`).
+
+**Cursor caveat:** new project MCP servers start **disabled** (Cursor security). After bootstrap + reload, toggle **nobu** on once under Settings → MCP (or Customize → MCP). Stays on for that workspace afterward — we cannot force-enable from the repo.
 
 **Claude Desktop:** almost — same bootstrap, but the agent must also merge the MCP snippet into the **global** `claude_desktop_config.json` (Desktop does not auto-load project `.mcp.json`).
 
-**Not magic:** `python` must be on PATH; the user must open the cloned folder (or point MCP at it); one reload after bootstrap is required.
+**Not magic:** `python` must be on PATH; open the cloned folder; reload after bootstrap; on Cursor, enable `nobu` once if it appears disabled.
 
 ## Paste this to your agent
 
@@ -34,7 +36,8 @@ nobu ships **no game-specific data**. Your project supplies tonic, mood, and bio
 Clone https://github.com/francescojr/nobu.git (sibling folder or into this workspace).
 Read AGENTS.md (and CLAUDE.md if present) and run: python scripts/bootstrap.py
 If this is a game project, also run: python scripts/bootstrap.py --integrate <this_project_root>
-Reload MCP, confirm server "nobu" has start_project / add_layer / export_midi.
+Reload MCP. In Cursor, enable server "nobu" if it is disabled (Settings → MCP).
+Confirm tools: start_project / add_layer / export_midi.
 Then follow .claude/skills/game-music-producer/ and compose when I ask.
 ```
 
@@ -46,7 +49,7 @@ Clone it next to this repo, run python scripts/bootstrap.py --integrate <absolut
 reload MCP, and confirm tools work. Do not hardcode our game data into nobu.
 ```
 
-Agents follow [AGENTS.md](AGENTS.md). Bootstrap rewrites `.mcp.json` + `.kilo/kilo.jsonc` to the local venv.
+Agents follow [AGENTS.md](AGENTS.md). Bootstrap rewrites project-local `.cursor/mcp.json` + `.mcp.json` + `.kilo/kilo.jsonc` to the local venv (never global Cursor MCP).
 
 ---
 
@@ -56,10 +59,10 @@ Agents follow [AGENTS.md](AGENTS.md). Bootstrap rewrites `.mcp.json` + `.kilo/ki
 git clone https://github.com/francescojr/nobu.git
 cd nobu
 python scripts/bootstrap.py
-# creates .venv, installs deps, writes .mcp.json, verifies imports
+# creates .venv, installs deps, writes .cursor/mcp.json, verifies imports
 ```
 
-Then reload MCP in your client. Full Cursor / Claude Desktop / Kilo notes: [SETUP.md](.claude/skills/game-music-producer/SETUP.md).
+Then reload MCP. In **Cursor**: Settings → MCP → enable **nobu** once if disabled. Full notes: [SETUP.md](.claude/skills/game-music-producer/SETUP.md).
 
 ### Demo without MCP
 

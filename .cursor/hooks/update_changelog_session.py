@@ -5,9 +5,9 @@ Cursor hook: keep CHANGELOG.md + pyproject version in sync with SemVer.
 Policy: NEVER use [Unreleased]. Every finalize cuts a new MAJOR.MINOR.PATCH.
 
 Events:
-  sessionStart — record git baseline + empty pending buckets
-  stop         — merge session diffs into pending state (no file write yet)
-  sessionEnd   — bump SemVer once and prepend ## [X.Y.Z] (stop is fallback too)
+  sessionStart — record git baseline ONLY (never write CHANGELOG / version)
+  stop         — agent turn finished → bump SemVer once per conversation
+  sessionEnd   — chat ended → same bump if stop did not already finalize
 
 Stdin: Cursor hook JSON. Stdout: optional JSON (sessionStart may return env).
 Fail-open: never block the agent on changelog errors.
@@ -476,42 +476,94 @@ def handle_finalize(payload: dict, event: str) -> dict:
     return {}
 
 
-def main() -> int:
-    payload = read_stdin_json()
-    event = (
+KNOWN_EVENTS = frozenset(
+    {
+        "sessionStart",
+        "SessionStart",
+        "sessionEnd",
+        "SessionEnd",
+        "stop",
+        "Stop",
+    }
+)
+
+
+def resolve_event(payload: dict) -> str:
+    """Decide which hook fired. Never guess 'finalize' on ambiguous start payloads.
+
+    Priority:
+      1. stdin hook_event_name (Cursor source of truth)
+      2. CURSOR_HOOK_EVENT env
+      3. argv token if it is a known event name (not a file path)
+      4. Heuristics: reason → sessionEnd; start-shaped payload → sessionStart
+      5. Otherwise empty (skip — do NOT version)
+    """
+    raw = (
         payload.get("hook_event_name")
         or os.environ.get("CURSOR_HOOK_EVENT")
         or ""
-    ).replace("SessionStart", "sessionStart").replace("SessionEnd", "sessionEnd")
+    )
+    if isinstance(raw, str) and raw in KNOWN_EVENTS:
+        return raw
 
-    # Infer from argv
-    if len(sys.argv) > 1:
-        event = sys.argv[1]
+    for arg in sys.argv[1:]:
+        if arg in KNOWN_EVENTS:
+            return arg
+
+    # sessionEnd uniquely carries reason (+ usually duration_ms)
+    if payload.get("reason") is not None:
+        return "sessionEnd"
+
+    # sessionStart: new composer — has session/composer fields, no reason/duration
+    if (
+        "duration_ms" not in payload
+        and payload.get("reason") is None
+        and (
+            payload.get("composer_mode") is not None
+            or "session_id" in payload
+            or "conversation_id" in payload
+            or payload.get("is_background_agent") is not None
+        )
+    ):
+        return "sessionStart"
+
+    # stop often includes loop_count; never infer stop from silence
+    if "loop_count" in payload:
+        return "stop"
+
+    return ""
+
+
+def main() -> int:
+    payload = read_stdin_json()
+    event = resolve_event(payload)
+    # Normalize casing used in branches
+    event_norm = (
+        event.replace("SessionStart", "sessionStart")
+        .replace("SessionEnd", "sessionEnd")
+        .replace("Stop", "stop")
+    )
 
     try:
-        if event in ("sessionStart", "SessionStart"):
+        if event_norm == "sessionStart":
+            # Baseline only — NEVER cut a SemVer entry here
             out = handle_session_start(payload)
             print(json.dumps(out))
             return 0
-        if event in ("sessionEnd", "SessionEnd"):
+        if event_norm == "sessionEnd":
             handle_finalize(payload, "sessionEnd")
             print("{}")
             return 0
-        if event in ("stop", "Stop"):
+        if event_norm == "stop":
             handle_finalize(payload, "stop")
             print("{}")
             return 0
-        # Default: treat as sessionEnd when Cursor omits name
-        if payload.get("reason") is not None:
-            handle_finalize(payload, "sessionEnd")
-        elif payload.get("composer_mode") is not None or payload.get(
-            "is_background_agent"
-        ) is not None and "duration_ms" not in payload:
-            out = handle_session_start(payload)
-            print(json.dumps(out))
-            return 0
-        else:
-            handle_finalize(payload, "sessionEnd")
+
+        log(
+            f"skip: unknown event (argv={sys.argv[1:]!r} "
+            f"hook_event_name={payload.get('hook_event_name')!r} "
+            f"keys={sorted(payload.keys())})"
+        )
         print("{}")
         return 0
     except Exception as e:

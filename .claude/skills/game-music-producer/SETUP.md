@@ -55,7 +55,7 @@ nobu/
 
 ### 3. Cursor
 
-Run `python scripts/bootstrap.py` — it writes `.mcp.json` using the venv Python + absolute path to `nobu_mcp.py` (gitignored; template is `.mcp.example.json`). Open the project in Cursor, enable MCP, reload the window.
+Run `python scripts/bootstrap.py` — it writes **project-local** `.cursor/mcp.json` (+ legacy `.mcp.json`) using the venv Python + absolute path to `nobu_mcp.py` (gitignored; never writes `~/.cursor/mcp.json`). Open the project in Cursor, reload the window, then **enable `nobu` once** under Settings → MCP if it shows disabled (Cursor security default — the repo cannot auto-toggle).
 
 Portable fallback (before bootstrap):
 
@@ -208,7 +208,7 @@ pip install -r requirements.txt
 
 ### Cursor
 
-O repo já inclui `.mcp.json` com o servidor `nobu`. Se `${workspaceFolder}` não for expandido, use caminho absoluto para `nobu_mcp.py`.
+Rode `python scripts/bootstrap.py` — gera `.cursor/mcp.json` + `.mcp.json` locais (gitignored). Template portable: `.mcp.example.json`. No Cursor, habilite `nobu` uma vez em Settings → MCP se vier desligado.
 
 ### Claude Desktop
 

@@ -16,8 +16,10 @@ build/
 .DS_Store
 Thumbs.db
 
-# Cursor hook session state
+# Cursor hook session state + machine-local MCP (absolute venv paths)
 .cursor/hooks/state/
+.cursor/mcp.json
+.mcp.json
 
 # Generated audio / local soundfonts (keep directory placeholders)
 assets/midi/*.mid
