@@ -6,14 +6,15 @@ Thin CLI wrapper around nobu_render.render_midi_file().
 Usage:
   python scripts/render_track.py assets/midi/biome1_calm.mid
   python scripts/render_track.py assets/midi/biome1_calm.mid --mode chip
+  python scripts/render_track.py assets/midi/biome1_calm.mid --mode chip --json
   python scripts/render_track.py assets/midi/biome1_calm.mid --mode hybrid --sf2 path.sf2
-  python scripts/render_track.py assets/midi/biome1_calm.mid --mode sf2
 
 Env: NOBU_MIDI_DIR, NOBU_OUTPUT_DIR, NOBU_SF2 (or FLUID_SYNTH_SF2).
 """
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 from pathlib import Path
@@ -22,11 +23,10 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-import nobu_render
 from nobu_render import MIDI_DIR, OUT_DIR, render_midi_file
 
 
-def main() -> None:
+def main() -> int:
     parser = argparse.ArgumentParser(
         description="Render MIDI → WAV/OGG (chip / hybrid / full SF2 — never hard-fails)"
     )
@@ -54,6 +54,16 @@ def main() -> None:
         default=0,
         help="Trim to exact loop length in beats",
     )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Print render result JSON to stdout (for agent shell fallback)",
+    )
+    parser.add_argument(
+        "--quiet",
+        action="store_true",
+        help="Suppress progress prints (JSON still goes to stdout with --json)",
+    )
     args = parser.parse_args()
 
     midi_path = args.input
@@ -63,13 +73,14 @@ def main() -> None:
             midi_path = str(alt)
         else:
             print(f"File not found: {midi_path}")
-            sys.exit(1)
+            return 1
 
     stem = os.path.splitext(os.path.basename(midi_path))[0]
     kwargs = {
         "soundfont": args.sf2,
         "loop_beats": args.loop_beats,
         "project_name": stem,
+        "quiet": args.quiet or args.json,
     }
     if args.out:
         kwargs["flat_legacy"] = True
@@ -77,9 +88,13 @@ def main() -> None:
     else:
         kwargs["output_root"] = OUT_DIR
 
-    render_midi_file(midi_path, args.mode, **kwargs)
-    print("Done.")
+    result = render_midi_file(midi_path, args.mode, **kwargs)
+    if args.json:
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+    else:
+        print("Done.")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

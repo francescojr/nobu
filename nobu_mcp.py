@@ -25,10 +25,12 @@ tonal centers, and mood choices come from the caller (game-music-producer skill
 
 from __future__ import annotations
 
-from fastmcp import FastMCP
+from fastmcp import Context, FastMCP
 from midiutil import MIDIFile
 import os
 import json
+import sys
+import time
 from pathlib import Path
 
 mcp = FastMCP("nobu")
@@ -171,6 +173,23 @@ def _ensure_midi_path(project_name: str) -> str:
     )
 
 
+def _make_progress_callback(ctx: Context | None):
+    def on_progress(stage: str, pct: float) -> None:
+        if ctx is not None:
+            try:
+                ctx.report_progress(progress=pct, total=1.0, message=stage)
+                return
+            except Exception:
+                pass
+        print(
+            f"[nobu render] {stage} ({pct:.0%})",
+            file=sys.stderr,
+            flush=True,
+        )
+
+    return on_progress
+
+
 def _render_project_impl(
     project_name: str,
     mode: str = "auto",
@@ -178,6 +197,7 @@ def _render_project_impl(
     loop_beats: float = 0,
     destination_dir: str | None = None,
     filename_stem: str | None = None,
+    ctx: Context | None = None,
 ) -> dict:
     import nobu_render
 
@@ -193,6 +213,7 @@ def _render_project_impl(
         project_name=project_name,
         filename_stem=stem,
         quiet=True,
+        on_progress=_make_progress_callback(ctx),
     )
 
 
@@ -506,9 +527,10 @@ def export_midi(
             "Use these beat/bar values to configure looping in your engine."
         ),
         "next_step": (
-            f"Call render_project('{project_name}', mode='chip') or "
-            f"render_all_modes('{project_name}') for audio in "
-            f"output/audio/{project_name}/"
+            f"Call get_render_capabilities() before hybrid/sf2. "
+            f"Then render_chip('{project_name}') for fast audio, or "
+            f"render_all_modes('{project_name}') only if the user wants all three "
+            f"compared — read mode_effective and quality_warnings in each result."
         ),
     }
     return json.dumps(metadata, ensure_ascii=False, indent=2)
@@ -537,65 +559,70 @@ def list_soundfonts() -> dict:
     return nobu_render.list_soundfonts_impl()
 
 
-@mcp.tool()
+@mcp.tool(timeout=300)
 def render_project(
     project_name: str,
     mode: str = "auto",
     soundfont: str | None = None,
     loop_beats: float = 0,
     destination_dir: str | None = None,
+    ctx: Context | None = None,
 ) -> str:
     """
     Render exported MIDI to WAV/OGG. mode: chip | hybrid | sf2 | auto.
     Output: output/audio/{project_name}/wav/ and .../ogg/.
     Exports MIDI first if the project exists in memory but .mid is missing.
-    Use render_all_modes when the user wants chip + hybrid + sf2 together.
+    Prefer render_chip for first audio delivery; use render_all_modes only when
+    the user wants chip + hybrid + sf2 compared (slower).
     """
     result = _render_project_impl(
-        project_name, mode, soundfont, loop_beats, destination_dir
+        project_name, mode, soundfont, loop_beats, destination_dir, ctx=ctx
     )
     return json.dumps(result, ensure_ascii=False, indent=2)
 
 
-@mcp.tool()
+@mcp.tool(timeout=300)
 def render_chip(
     project_name: str,
     loop_beats: float = 0,
     destination_dir: str | None = None,
+    ctx: Context | None = None,
 ) -> str:
     """
-    Render pure chiptune (no SF2). Same as render_project(mode='chip').
-    Use render_all_modes if the user wants chip + hybrid + sf2 in one call.
+    Render pure chiptune (no SF2). Preferred first audio delivery tool.
+    Fast and always works without soundfonts. Use render_all_modes only when
+    the user explicitly wants chip + hybrid + sf2 compared.
     """
     result = _render_project_impl(
-        project_name, "chip", None, loop_beats, destination_dir
+        project_name, "chip", None, loop_beats, destination_dir, ctx=ctx
     )
     return json.dumps(result, ensure_ascii=False, indent=2)
 
 
-@mcp.tool()
+@mcp.tool(timeout=300)
 def render_hybrid(
     project_name: str,
     soundfont: str | None = None,
     loop_beats: float = 0,
     destination_dir: str | None = None,
+    ctx: Context | None = None,
 ) -> str:
     """
     Render SF2 drums + chiptune melodic. Falls back to chip if SF2/tsf missing.
-    Use render_all_modes for all three versions at once.
     """
     result = _render_project_impl(
-        project_name, "hybrid", soundfont, loop_beats, destination_dir
+        project_name, "hybrid", soundfont, loop_beats, destination_dir, ctx=ctx
     )
     return json.dumps(result, ensure_ascii=False, indent=2)
 
 
-@mcp.tool()
+@mcp.tool(timeout=300)
 def render_sf2(
     project_name: str,
     soundfont: str | None = None,
     loop_beats: float = 0,
     destination_dir: str | None = None,
+    ctx: Context | None = None,
 ) -> str:
     """
     Render full SoundFont via FluidSynth. Falls back to hybrid or chip.
@@ -603,24 +630,30 @@ def render_sf2(
     to check availability first.
     """
     result = _render_project_impl(
-        project_name, "sf2", soundfont, loop_beats, destination_dir
+        project_name, "sf2", soundfont, loop_beats, destination_dir, ctx=ctx
     )
     return json.dumps(result, ensure_ascii=False, indent=2)
 
 
-@mcp.tool()
+@mcp.tool(timeout=300)
 def render_all_modes(
     project_name: str,
     soundfont: str | None = None,
     destination_dir: str | None = None,
+    ctx: Context | None = None,
 ) -> str:
     """
-    Render chip, hybrid, and sf2 versions in one call (boss fight / compare modes).
+    Render chip, hybrid, and sf2 versions in one call (compare modes).
+    Slow (up to ~3 min) — use only when the user asks for all versions.
+    For normal delivery use render_chip first.
     Output files: {project}_chip, {project}_hybrid, {project}_sf2 under
-    output/audio/{project_name}/wav/ and .../ogg/. May take up to ~2 minutes.
+    output/audio/{project_name}/wav/ and .../ogg/.
+    Always report mode_effective, fallback_reason, and quality_warnings per mode.
     """
     modes = ("chip", "hybrid", "sf2")
     out: dict = {"project": project_name, "modes": {}}
+    all_quality: list[str] = []
+    t0 = time.perf_counter()
     for m in modes:
         result = _render_project_impl(
             project_name,
@@ -629,12 +662,18 @@ def render_all_modes(
             0,
             destination_dir,
             f"{project_name}_{m}",
+            ctx=ctx,
         )
         out["modes"][m] = result
+        for w in result.get("quality_warnings") or []:
+            all_quality.append(f"{m}: {w}")
         if "output_dir" not in out:
             out["output_dir"] = result.get("output_dir")
             out["midi_file"] = result.get("midi_file")
 
+    if all_quality:
+        out["quality_warnings"] = all_quality
+    out["render_duration_sec"] = round(time.perf_counter() - t0, 3)
     return json.dumps(out, ensure_ascii=False, indent=2)
 
 

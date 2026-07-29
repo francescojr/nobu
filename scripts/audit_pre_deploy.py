@@ -5,6 +5,7 @@ from __future__ import annotations
 import inspect
 import json
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -139,15 +140,13 @@ else:
 print("\n7. Version sync")
 pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
 changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
-if 'version = "0.2.1"' in pyproject and "## [0.2.1]" in changelog:
-    ok("pyproject + CHANGELOG 0.2.1")
+if 'version = "0.2.3"' in pyproject and "## [0.2.3]" in changelog:
+    ok("pyproject + CHANGELOG 0.2.3")
 else:
     fail("version mismatch pyproject/CHANGELOG")
 
 # 8. Bootstrap JSON report
 print("\n8. Bootstrap JSON")
-import subprocess
-
 r = subprocess.run(
     [sys.executable, str(ROOT / "scripts" / "bootstrap.py"), "--json", "--no-prompt", "--skip-install"],
     capture_output=True,
@@ -167,6 +166,41 @@ else:
                 ok(f"bootstrap report has {key}")
             else:
                 fail(f"bootstrap report missing {key}")
+
+# 9. Render benchmark
+print("\n9. Render benchmark")
+r = subprocess.run(
+    [sys.executable, str(ROOT / "scripts" / "bench_render.py")],
+    capture_output=True,
+    text=True,
+    cwd=str(ROOT),
+)
+if r.returncode == 0:
+    ok("bench_render under 15s budget")
+else:
+    fail(f"bench_render: {r.stdout.strip()} {r.stderr.strip()}")
+
+# 10. FluidSynth argv order
+print("\n10. FluidSynth argv")
+r = subprocess.run(
+    [sys.executable, str(ROOT / "scripts" / "test_fluidsynth_argv.py")],
+    capture_output=True,
+    text=True,
+    cwd=str(ROOT),
+)
+if r.returncode == 0:
+    ok("fluidsynth -F before sf2/midi")
+else:
+    fail(f"test_fluidsynth_argv: {r.stdout.strip()} {r.stderr.strip()}")
+
+# 11. Capabilities fluidsynth fields
+print("\n11. Capabilities schema")
+caps = nobu_render.get_render_capabilities_impl()
+for key in ("fluidsynth_path", "fluidsynth_version"):
+    if key in caps:
+        ok(f"capabilities has {key}")
+    else:
+        fail(f"capabilities missing {key}")
 
 print("\n=== summary ===")
 if failures:

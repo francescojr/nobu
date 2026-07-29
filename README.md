@@ -8,7 +8,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![Version](https://img.shields.io/badge/version-0.2.1-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.2.3-blue.svg)](CHANGELOG.md)
 [![Changelog](https://img.shields.io/badge/changelog-Keep%20a%20Changelog-orange.svg)](CHANGELOG.md)
 
 Plug nobu into **Cursor**, **Claude Desktop**, or **Kilo Code**. Ask an agent to compose a stage theme — get a real multi-track `.mid`, then render to `.ogg` / `.wav` for your engine.
@@ -87,13 +87,14 @@ python scripts/bootstrap.py --no-prompt --smoke
 python scripts/bootstrap.py --with-render --no-prompt   # hybrid drums (pip)
 python scripts/bootstrap.py --doctor                    # re-check deps
 # SF2: copy your .sf2 → assets/soundfonts/default.sf2 (see assets/soundfonts/README.md)
+# Kilo: Settings → MCP → nobu → Network Timeout → 5 min
 ```
 
 ### Works out of the box vs optional
 
 | After bootstrap | Works? |
 |---|---|
-| Compose + render **chip** via MCP | Yes |
+| Compose + render **chip** via MCP | Yes (use `render_chip`; ~sub-second render) |
 | Render **hybrid** | Needs `tinysoundfont` + your `.sf2` |
 | Render **sf2** | Needs FluidSynth CLI + your `.sf2` |
 | OGG on Windows | `ffmpeg` recommended (WAV always works) |

@@ -16,7 +16,7 @@
       // Replace these placeholders or let scripts/bootstrap.py rewrite kilo.jsonc.
       "command": ["python", "nobu_mcp.py"],
       "enabled": true,
-      "timeout": 120000
+      "timeout": 300000
     }
   }
 }

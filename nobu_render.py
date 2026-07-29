@@ -11,13 +11,13 @@ Env: NOBU_MIDI_DIR, NOBU_OUTPUT_DIR, NOBU_SF2 (or FLUID_SYNTH_SF2).
 """
 from __future__ import annotations
 
-import math
 import os
 import platform
-import random
 import shutil
 import subprocess
 import sys
+import time
+from collections.abc import Callable
 from pathlib import Path
 
 import numpy as np
@@ -26,6 +26,15 @@ import mido
 SAMPLE_RATE = 44100
 CHIP_SR = 22050
 MIN_AUDIO_BYTES = 8192
+# SF2 WAV below this bytes/sec on long tracks likely means fallback/chip, not real FS.
+MIN_SF2_BYTES_PER_SEC = 80_000
+MIN_SF2_QUALITY_DURATION_SEC = 15.0
+
+FLUIDSYNTH_WINDOWS_CANDIDATES = (
+    Path(r"C:\Program Files\FluidSynth\bin\fluidsynth.exe"),
+    Path(r"C:\Program Files (x86)\FluidSynth\bin\fluidsynth.exe"),
+    Path(os.environ.get("LOCALAPPDATA", "")) / "Microsoft" / "WinGet" / "Links" / "fluidsynth.exe",
+)
 
 ROOT = Path(__file__).resolve().parent
 MIDI_DIR = Path(os.environ.get("NOBU_MIDI_DIR", str(ROOT / "assets" / "midi")))
@@ -48,16 +57,38 @@ def midi_to_freq(note: int) -> float:
     return 440.0 * (2.0 ** ((note - 69) / 12.0))
 
 
-def adsr_gain(t: float, dur: float, p: dict) -> float:
+def adsr_gain_array(t: np.ndarray, dur: float, p: dict) -> np.ndarray:
     a, d, s, r = p["a"], p["d"], p["s"], p["r"]
-    if t < a:
-        return t / a if a > 0 else 1.0
-    if t < a + d:
-        return 1.0 - (1.0 - s) * ((t - a) / d) if d > 0 else s
-    if t < dur - r:
-        return s
-    rt = t - (dur - r)
-    return s * max(1.0 - rt / max(r, 0.001), 0.0) if rt < r and r > 0 else 0.0
+    env = np.zeros_like(t, dtype=np.float64)
+    sustain_end = max(dur - r, 0.0)
+    ms = (t >= a + d) & (t < sustain_end)
+    env[ms] = s
+    md = (t >= a) & (t < a + d)
+    if np.any(md):
+        env[md] = 1.0 - (1.0 - s) * ((t[md] - a) / d) if d > 0 else s
+    ma = t < a
+    if np.any(ma):
+        env[ma] = (t[ma] / a) if a > 0 else 1.0
+    if r > 0:
+        mr = t >= sustain_end
+        rt = t[mr] - sustain_end
+        env[mr] = s * np.maximum(1.0 - rt / max(r, 0.001), 0.0)
+        env[t >= dur] = 0.0
+    return env.astype(np.float32)
+
+
+ProgressCallback = Callable[[str, float], None]
+
+
+def _emit_progress(
+    on_progress: ProgressCallback | None,
+    stages: list[str],
+    stage: str,
+    pct: float,
+) -> None:
+    stages.append(stage)
+    if on_progress:
+        on_progress(stage, pct)
 
 
 def parse_midi(path: str) -> dict:
@@ -151,8 +182,95 @@ def has_tinysoundfont() -> bool:
         return False
 
 
+def resolve_fluidsynth() -> str | None:
+    """Return absolute path to fluidsynth CLI, or None."""
+    env_bin = os.environ.get("FLUIDSYNTH")
+    if env_bin and Path(env_bin).is_file():
+        return str(Path(env_bin).resolve())
+    found = shutil.which("fluidsynth")
+    if found:
+        return found
+    if platform.system() == "Windows":
+        for candidate in FLUIDSYNTH_WINDOWS_CANDIDATES:
+            if candidate.is_file():
+                return str(candidate.resolve())
+    return None
+
+
+def fluidsynth_version(fluidsynth_path: str | None = None) -> str | None:
+    exe = fluidsynth_path or resolve_fluidsynth()
+    if not exe:
+        return None
+    try:
+        result = subprocess.run(
+            [exe, "--version"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        return None
+    line = (result.stdout or result.stderr or "").strip().splitlines()
+    return line[0] if line else None
+
+
 def has_fluidsynth() -> bool:
-    return shutil.which("fluidsynth") is not None
+    return resolve_fluidsynth() is not None
+
+
+def build_fluidsynth_cmd(
+    sf2_path: str,
+    midi_path: str,
+    wav_path: str,
+    *,
+    fluidsynth_exe: str | None = None,
+) -> list[str]:
+    """Build FluidSynth argv (-F and rate flags before soundfont/midi — FS 2.5.x)."""
+    exe = fluidsynth_exe or resolve_fluidsynth() or "fluidsynth"
+    return [
+        exe,
+        "-ni",
+        "-F",
+        wav_path,
+        "-r",
+        str(SAMPLE_RATE),
+        "-R",
+        "0",
+        "-g",
+        "1.5",
+        sf2_path,
+        midi_path,
+    ]
+
+
+def assess_render_quality(
+    *,
+    mode_requested: str,
+    mode_effective: str,
+    wav_path: str | None,
+    duration_sec: float,
+) -> list[str]:
+    warnings: list[str] = []
+    if mode_requested in ("sf2", "auto") and mode_effective != mode_requested:
+        if mode_requested == "sf2" and mode_effective in ("hybrid", "chip"):
+            warnings.append(
+                f"mode_requested=sf2 but mode_effective={mode_effective} — not full SF2"
+            )
+        elif mode_requested == "auto" and mode_effective == "chip":
+            warnings.append("auto resolved to chip — hybrid/sf2 deps missing")
+    if (
+        mode_effective == "sf2"
+        and wav_path
+        and os.path.isfile(wav_path)
+        and duration_sec > MIN_SF2_QUALITY_DURATION_SEC
+    ):
+        wav_size = os.path.getsize(wav_path)
+        min_expected = int(duration_sec * MIN_SF2_BYTES_PER_SEC)
+        if wav_size < min_expected:
+            warnings.append(
+                "sf2_wav_suspiciously_small — verify FluidSynth ran (expected larger WAV)"
+            )
+    return warnings
 
 
 def audio_output_paths(
@@ -216,7 +334,9 @@ def list_soundfonts_impl() -> dict:
 def get_render_capabilities_impl() -> dict:
     sf2_path = find_soundfont()
     sf2_ok = bool(sf2_path)
-    fs_ok = has_fluidsynth()
+    fs_path = resolve_fluidsynth()
+    fs_ok = fs_path is not None
+    fs_version = fluidsynth_version(fs_path) if fs_path else None
     tsf_ok = has_tinysoundfont()
     ffmpeg_ok = shutil.which("ffmpeg") is not None
 
@@ -235,7 +355,7 @@ def get_render_capabilities_impl() -> dict:
     if not fs_ok:
         if platform.system() == "Windows":
             install_hints.append(
-                "winget install FluidSynth.FluidSynth  # sf2 mode"
+                "winget install FluidSynth.FluidSynth  # sf2 mode; restart MCP session after install"
             )
         else:
             install_hints.append("Install FluidSynth CLI on PATH  # sf2 mode")
@@ -246,6 +366,8 @@ def get_render_capabilities_impl() -> dict:
 
     return {
         "fluidsynth": fs_ok,
+        "fluidsynth_path": fs_path,
+        "fluidsynth_version": fs_version,
         "ffmpeg": ffmpeg_ok,
         "tinysoundfont": tsf_ok,
         "sf2_found": sf2_ok,
@@ -258,70 +380,66 @@ def get_render_capabilities_impl() -> dict:
 
 def _synth_kick(duration: float, volume: float, sr: int) -> np.ndarray:
     n = int(duration * sr)
-    out = np.zeros(n, dtype=np.float32)
+    if n <= 0:
+        return np.zeros(1, dtype=np.float32)
+    t = np.arange(n, dtype=np.float32) / sr
     vol = volume / 127.0
-    p = ADSR["kick"]
-    for i in range(n):
-        t = i / sr
-        env = adsr_gain(t, duration, p)
-        if env <= 0.001:
-            continue
-        freq = max(100.0 - (65.0 * (t / max(duration, 0.001))), 30.0)
-        body = math.sin(2.0 * math.pi * freq * t)
-        click = 0.0
-        if t < 0.002:
-            click = math.sin(2.0 * math.pi * 1000.0 * t) * (1.0 - t / 0.002) * 0.3
-        out[i] = math.tanh((body + click) * 2.0) * env * vol * 1.2
-    return out
+    env = adsr_gain_array(t, duration, ADSR["kick"])
+    freq = np.maximum(100.0 - (65.0 * (t / max(duration, 0.001))), 30.0)
+    body = np.sin(2.0 * np.pi * freq * t)
+    click = np.zeros(n, dtype=np.float32)
+    cm = t < 0.002
+    click[cm] = (
+        np.sin(2.0 * np.pi * 1000.0 * t[cm]) * (1.0 - t[cm] / 0.002) * 0.3
+    )
+    out = np.tanh((body + click) * 2.0) * env * vol * 1.2
+    out[env <= 0.001] = 0.0
+    return out.astype(np.float32)
 
 
 def _synth_snare(duration: float, volume: float, sr: int) -> np.ndarray:
     n = int(duration * sr)
-    out = np.zeros(n, dtype=np.float32)
+    if n <= 0:
+        return np.zeros(1, dtype=np.float32)
+    t = np.arange(n, dtype=np.float32) / sr
     vol = volume / 127.0
-    p = ADSR["snare"]
-    for i in range(n):
-        t = i / sr
-        env = adsr_gain(t, duration, p)
-        if env <= 0.001:
-            continue
-        tone = math.sin(2.0 * math.pi * 180.0 * t) * 0.4
-        ring = math.sin(2.0 * math.pi * 400.0 * t) * 0.15
-        noise = random.random() * 2.0 - 1.0
-        wav = tone + ring + noise * 0.7
-        if t < 0.003:
-            wav *= 1.3
-        out[i] = wav * env * vol
-    return out
+    env = adsr_gain_array(t, duration, ADSR["snare"])
+    tone = np.sin(2.0 * np.pi * 180.0 * t) * 0.4
+    ring = np.sin(2.0 * np.pi * 400.0 * t) * 0.15
+    noise = np.random.random(n).astype(np.float32) * 2.0 - 1.0
+    wav = tone + ring + noise * 0.7
+    wav[t < 0.003] *= 1.3
+    out = wav * env * vol
+    out[env <= 0.001] = 0.0
+    return out.astype(np.float32)
 
 
 def _synth_hihat(duration: float, volume: float, sr: int, open_hat: bool) -> np.ndarray:
     n = int(duration * sr)
-    out = np.zeros(n, dtype=np.float32)
+    if n <= 0:
+        return np.zeros(1, dtype=np.float32)
+    t = np.arange(n, dtype=np.float32) / sr
     vol = volume / 127.0
     p = ADSR["hihat_open" if open_hat else "hihat_closed"]
     gain = 0.8 if open_hat else 0.55
-    for i in range(n):
-        t = i / sr
-        env = adsr_gain(t, duration, p)
-        if env <= 0.001:
-            continue
-        out[i] = (random.random() * 2.0 - 1.0) * env * vol * gain
-    return out
+    env = adsr_gain_array(t, duration, p)
+    noise = np.random.random(n).astype(np.float32) * 2.0 - 1.0
+    out = noise * env * vol * gain
+    out[env <= 0.001] = 0.0
+    return out.astype(np.float32)
 
 
 def _synth_crash(duration: float, volume: float, sr: int) -> np.ndarray:
     n = int(duration * sr)
-    out = np.zeros(n, dtype=np.float32)
+    if n <= 0:
+        return np.zeros(1, dtype=np.float32)
+    t = np.arange(n, dtype=np.float32) / sr
     vol = volume / 127.0
-    p = ADSR["crash"]
-    for i in range(n):
-        t = i / sr
-        env = adsr_gain(t, duration, p)
-        if env <= 0.001:
-            continue
-        out[i] = (random.random() * 2.0 - 1.0) * env * vol * 0.5
-    return out
+    env = adsr_gain_array(t, duration, ADSR["crash"])
+    noise = np.random.random(n).astype(np.float32) * 2.0 - 1.0
+    out = noise * env * vol * 0.5
+    out[env <= 0.001] = 0.0
+    return out.astype(np.float32)
 
 
 def synth_drum_hit(pitch: int, duration: float, volume: float, sr: int) -> np.ndarray:
@@ -411,6 +529,18 @@ def render_drums_sf2(drum_notes: list, sf2_path: str) -> np.ndarray:
     return mono
 
 
+def _melodic_waveform(phase: np.ndarray, wt: str, duty: float) -> np.ndarray:
+    if wt == "square":
+        return np.where(phase < duty, 1.0, -1.0).astype(np.float32)
+    if wt == "triangle":
+        return np.where(
+            phase < 0.25,
+            4.0 * phase,
+            np.where(phase < 0.75, 2.0 - 4.0 * phase, 4.0 * phase - 4.0),
+        ).astype(np.float32)
+    return np.where(phase < 0.5, 1.0, -1.0).astype(np.float32)
+
+
 def render_melodic(mel_tracks: list) -> np.ndarray:
     if not mel_tracks:
         return np.zeros(1, dtype=np.float32)
@@ -433,34 +563,23 @@ def render_melodic(mel_tracks: list) -> np.ndarray:
         else:
             wt, ak, duty = "square", "pulse_lead", 0.5
 
+        adsr_p = ADSR[ak]
+        gain = 0.22 / 127.0
+
         for n in t["notes"]:
             start = int(n["start_sec"] * CHIP_SR)
             dur = max(n["dur_sec"], 0.005)
             freq = midi_to_freq(n["pitch"])
             vel = n["vel"]
             n_s = int(dur * CHIP_SR)
-            adsr_p = ADSR[ak]
-            buf = np.zeros(n_s, dtype=np.float32)
-
-            for i in range(n_s):
-                t_i = i / CHIP_SR
-                env = adsr_gain(t_i, dur, adsr_p)
-                if env <= 0.001:
-                    continue
-                phase = (freq * t_i) % 1.0
-                if wt == "square":
-                    wav = 1.0 if phase < duty else -1.0
-                elif wt == "triangle":
-                    if phase < 0.25:
-                        wav = 4.0 * phase
-                    elif phase < 0.75:
-                        wav = 2.0 - 4.0 * phase
-                    else:
-                        wav = 4.0 * phase - 4.0
-                else:
-                    wav = 1.0 if phase < 0.5 else -1.0
-                buf[i] = wav * env * (vel / 127.0) * 0.22
-
+            if n_s <= 0:
+                continue
+            t_arr = np.arange(n_s, dtype=np.float32) / CHIP_SR
+            env = adsr_gain_array(t_arr, dur, adsr_p)
+            phase = (freq * t_arr) % 1.0
+            wav = _melodic_waveform(phase, wt, duty)
+            buf = wav * env * vel * gain
+            buf[env <= 0.001] = 0.0
             end = start + n_s
             if end > total_samples:
                 n_s = total_samples - start
@@ -610,20 +729,13 @@ def render_full_sf2(
     os.makedirs(os.path.dirname(wav_path) or ".", exist_ok=True)
     os.makedirs(os.path.dirname(ogg_path) or ".", exist_ok=True)
 
-    cmd_wav = [
-        "fluidsynth",
-        "-ni",
-        sf2_path,
-        midi_path,
-        "-F",
-        wav_path,
-        "-r",
-        str(SAMPLE_RATE),
-        "-R",
-        "0",
-        "-g",
-        "1.5",
-    ]
+    fs_exe = resolve_fluidsynth()
+    if not fs_exe:
+        if not quiet:
+            print("  FluidSynth not on PATH")
+        return {"ok": False, "reason": "fluidsynth not on PATH"}
+
+    cmd_wav = build_fluidsynth_cmd(sf2_path, midi_path, wav_path, fluidsynth_exe=fs_exe)
     try:
         result = subprocess.run(
             cmd_wav, capture_output=True, text=True, timeout=90
@@ -716,10 +828,14 @@ def render_chip_or_hybrid(
     ogg_path: str,
     loop_beats: float,
     quiet: bool = False,
+    on_progress: ProgressCallback | None = None,
+    stages: list[str] | None = None,
 ) -> dict:
+    stage_log = stages if stages is not None else []
     if mode == "hybrid":
         if not quiet:
             print("Drums via SF2...", end=" ", flush=True)
+        _emit_progress(on_progress, stage_log, "synthesizing_drums", 0.3)
         try:
             drums = render_drums_sf2(data["drums"], sf2_path)
         except Exception as e:
@@ -732,23 +848,29 @@ def render_chip_or_hybrid(
     else:
         if not quiet:
             print("Drums via chiptune...", end=" ", flush=True)
+        _emit_progress(on_progress, stage_log, "synthesizing_drums", 0.3)
         drums = render_drums_chip(data["drums"])
         if not quiet:
             print(f"peak={float(np.max(np.abs(drums))):.3f}")
 
     if not quiet:
         print("Melodic via chiptune...", end=" ", flush=True)
+    _emit_progress(on_progress, stage_log, "synthesizing_melodic", 0.6)
     melodic = render_melodic(data["melodic"])
     if not quiet:
         print(f"peak={float(np.max(np.abs(melodic))):.3f}")
 
     if not quiet:
         print("Mixing...", end=" ", flush=True)
+    _emit_progress(on_progress, stage_log, "mixing", 0.8)
     mixed = mix_down(drums, melodic)
     if not quiet:
         print(f"peak={float(np.max(np.abs(mixed))):.3f}")
 
-    return write_output(mixed, wav_path, ogg_path, loop_beats, data["bpm"], quiet=quiet)
+    _emit_progress(on_progress, stage_log, "writing_wav", 0.9)
+    out = write_output(mixed, wav_path, ogg_path, loop_beats, data["bpm"], quiet=quiet)
+    _emit_progress(on_progress, stage_log, "writing_ogg", 1.0)
+    return out
 
 
 def render_midi_file(
@@ -763,7 +885,10 @@ def render_midi_file(
     flat_legacy: bool = False,
     legacy_out_base: str | None = None,
     quiet: bool = False,
+    on_progress: ProgressCallback | None = None,
 ) -> dict:
+    t0 = time.perf_counter()
+    stages: list[str] = []
     if not os.path.exists(midi_path):
         alt = MIDI_DIR / Path(midi_path).name
         if alt.exists():
@@ -775,8 +900,6 @@ def render_midi_file(
     sf2_path = find_soundfont(soundfont)
     effective, mode_note = resolve_mode(requested, sf2_path)
     fallback_reason = mode_note if effective != requested else None
-    if effective != requested and "falling back" in mode_note.lower():
-        fallback_reason = mode_note
 
     stem = project_name or Path(midi_path).stem
     fname = filename_stem or stem
@@ -806,6 +929,7 @@ def render_midi_file(
         print(f"SF2:   {sf2_path or '(none)'}")
 
     if effective == "sf2":
+        _emit_progress(on_progress, stages, "rendering_sf2", 0.2)
         sf2_out = render_full_sf2(
             midi_path, sf2_path, paths["wav"], paths["ogg"], quiet=quiet
         )
@@ -814,6 +938,17 @@ def render_midi_file(
             result["ogg"] = sf2_out.get("ogg")
             if sf2_out.get("ogg_skipped_reason"):
                 result["ogg_skipped_reason"] = sf2_out["ogg_skipped_reason"]
+            result["render_stages_completed"] = stages
+            result["render_duration_sec"] = round(time.perf_counter() - t0, 3)
+            sf2_data = parse_midi(midi_path)
+            quality = assess_render_quality(
+                mode_requested=requested,
+                mode_effective=result["mode_effective"],
+                wav_path=result.get("wav"),
+                duration_sec=sf2_data["duration"],
+            )
+            if quality:
+                result["quality_warnings"] = quality
             return result
         if not quiet:
             print("Falling back to pure chiptune...")
@@ -824,6 +959,7 @@ def render_midi_file(
             (result.get("fallback_reason") or "") + f"; {extra}"
         ).strip("; ")
 
+    _emit_progress(on_progress, stages, "parsing_midi", 0.1)
     data = parse_midi(midi_path)
     if not quiet:
         print(
@@ -832,7 +968,15 @@ def render_midi_file(
             f"{sum(len(t['notes']) for t in data['melodic'])} melodic notes"
         )
     chip_out = render_chip_or_hybrid(
-        data, effective, sf2_path, paths["wav"], paths["ogg"], loop_beats, quiet=quiet
+        data,
+        effective,
+        sf2_path,
+        paths["wav"],
+        paths["ogg"],
+        loop_beats,
+        quiet=quiet,
+        on_progress=on_progress,
+        stages=stages,
     )
     result["wav"] = chip_out.get("wav")
     result["ogg"] = chip_out.get("ogg")
@@ -841,4 +985,14 @@ def render_midi_file(
     if result.get("fallback_reason"):
         caps = get_render_capabilities_impl()
         result["install_hints"] = caps.get("install_hints", [])
+    quality = assess_render_quality(
+        mode_requested=requested,
+        mode_effective=result["mode_effective"],
+        wav_path=result.get("wav"),
+        duration_sec=data["duration"],
+    )
+    if quality:
+        result["quality_warnings"] = quality
+    result["render_stages_completed"] = stages
+    result["render_duration_sec"] = round(time.perf_counter() - t0, 3)
     return result

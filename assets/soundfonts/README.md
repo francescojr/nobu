@@ -11,7 +11,7 @@ SF2 only unlocks hybrid / full SF2 modes.
 2. Or set `NOBU_SF2=/path/to/yours.sf2` (also accepts `FLUID_SYNTH_SF2`).
 3. Re-check: `python scripts/bootstrap.py --doctor` or MCP `get_render_capabilities`.
 4. **Hybrid** also needs `tinysoundfont` (`python scripts/bootstrap.py --with-render --no-prompt`).
-5. **Full SF2** also needs FluidSynth on PATH (see SETUP.md).
+5. **Full SF2** also needs FluidSynth on PATH — Windows: `winget install FluidSynth.FluidSynth`, then restart Kilo/MCP session. See SETUP.md.
 
 ## Recommended default path
 

@@ -45,6 +45,14 @@ Trigger this checklist when: the user says install/setup/use nobu, the repo was 
    python scripts/bootstrap.py --smoke --no-prompt        # end-to-end chip render proof
    ```
 
+   **Kilo:** bootstrap writes `"timeout": 300000` in `.kilo/kilo.jsonc`. Also set
+   Settings → MCP → nobu → **Network Timeout → 5 minutes** if render fails with `-32001`.
+   Prefer MCP **`render_chip`** for first audio; use shell fallback:
+
+   ```bash
+   python scripts/render_track.py assets/midi/{project}.mid --mode chip --json
+   ```
+
 2. **Reload MCP** so the client picks up the rewritten config:
    - **Cursor**: Developer: Reload Window, then **enable `nobu` once** if it shows disabled
      (Settings → MCP / Customize → MCP). Cursor ships new project servers disabled by design;
@@ -101,6 +109,8 @@ python scripts/render_midi.py --mode sf2 --soundfont assets/soundfonts/default.s
 ```
 
 Full SF2 always renders **WAV via FluidSynth**, then converts to OGG with `ffmpeg` when available (on non-Windows, `soundfile` may convert WAV→OGG if ffmpeg is missing). Do not pass FluidSynth `-O s3m` — `-O` is sample format (`s16`/`float`), not an OGG container, and many Windows builds cannot write Vorbis at all.
+
+**SF2 checklist:** call `get_render_capabilities()` before hybrid/sf2; after render read `mode_effective`, `fallback_reason`, `quality_warnings`. Windows: `winget install FluidSynth.FluidSynth` then **restart MCP session**. FluidSynth 2.5.x needs `-F` before `.sf2`/`.mid` (handled in `nobu_render.py`).
 
 Never treat missing SF2 as a fatal error — fall back and tell the user.
 

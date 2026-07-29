@@ -36,12 +36,32 @@ Always follow this order:
 5. **`list_layers(project_name)`** — review before export.
 6. **`export_midi(project_name, destination_dir)`** — writes `.mid` to `assets/midi/`.
 7. **Render (when user wants audio):**
-   - **`get_render_capabilities()`** — optional, before promising SF2/hybrid.
+   - **`get_render_capabilities()`** — **required** before promising SF2/hybrid; read `modes_available`, `fluidsynth_path`, `install_hints`.
+   - **`render_chip(project_name)`** — **preferred first delivery** (fast, no SF2).
    - **`render_project(project_name, mode)`** — single mode (`chip` | `hybrid` | `sf2` | `auto`).
-   - **`render_chip` / `render_hybrid` / `render_sf2`** — explicit mode shortcuts.
-   - **`render_all_modes(project_name)`** — chip + hybrid + sf2 in one call (boss fight compare).
+   - **`render_hybrid` / `render_sf2`** — explicit mode shortcuts.
+   - **`render_all_modes(project_name)`** — only when user asks to compare all three (slow, up to ~3 min).
+
+After every render, read **`mode_effective`**, **`fallback_reason`**, and **`quality_warnings`** in the JSON. Do not report “SF2 delivered” if `mode_effective` is not `sf2` or if `quality_warnings` is non-empty.
+
+Use default output layout only (`output/audio/{project}/wav|ogg/`). Do **not** use custom `destination_dir` unless the user explicitly asks.
 
 Output: `output/audio/{project_name}/wav/` and `output/audio/{project_name}/ogg/`.
+
+**Expected WAV sizes (~38s track):** chip ~3.5 MB, full SF2 ~7 MB. Similar sizes for chip and “sf2” mean fallback — check JSON.
+
+### MCP render timeout (`-32001`)
+
+If `render_chip` / `render_project` fails with **`MCP error -32001: Request timed out`**:
+
+1. **Kilo:** Settings → MCP → nobu → Network Timeout → **5 minutes**; re-run bootstrap so `.kilo/kilo.jsonc` has `"timeout": 300000`.
+2. **Retry via shell** (same result, no MCP timeout):
+
+```bash
+python scripts/render_track.py assets/midi/{project}.mid --mode chip --json
+```
+
+3. Do **not** use `render_all_modes` for first delivery — use `render_chip` only.
 
 Shell fallback (manual):
 

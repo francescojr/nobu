@@ -37,9 +37,11 @@ pip install "nobu[render]"   # or: pip install tinysoundfont==0.3.7
 For richer `.mid` → `.ogg` rendering:
 
 ```bash
-# Windows:  choco install fluidsynth
-# macOS:    brew install fluidsynth
-# Linux:    apt install fluidsynth
+# Windows (recommended):  winget install FluidSynth.FluidSynth
+#                         then restart Kilo / MCP session (PATH)
+# Windows (alt):         choco install fluidsynth
+# macOS:                 brew install fluidsynth
+# Linux:                 apt install fluidsynth
 ```
 
 Full SF2 mode always does **FluidSynth → WAV**, then converts to OGG with **`ffmpeg`** when available. On non-Windows, `soundfile` may convert WAV→OGG if ffmpeg is missing; on Windows, install `ffmpeg` for OGG from `render_track` / SF2 (some libsndfile wheels crash encoding Vorbis).
@@ -47,6 +49,8 @@ Full SF2 mode always does **FluidSynth → WAV**, then converts to OGG with **`f
 `render_midi.py --mode chip` can still write OGG directly via `soundfile` from the in-memory buffer.
 
 Windows FluidSynth builds often cannot write OGG/Vorbis directly (`-T ogg` / filename `.ogg`). nobu does not rely on that path. Note: FluidSynth `-O` sets **sample format** (`s16`, `float`, …), not the file container.
+
+FluidSynth **2.5.x** (common on Windows via winget): nobu passes `-F` and sample-rate flags **before** the `.sf2` and `.mid` paths. Re-check with `python scripts/bootstrap.py --doctor`.
 
 ### 2. Folder layout
 
@@ -126,11 +130,15 @@ Manual example (replace paths with absolutes from your machine):
         "C:/path/to/nobu/nobu_mcp.py"
       ],
       "enabled": true,
-      "timeout": 30000
+      "timeout": 300000
     }
   }
 }
 ```
+
+**Kilo render timeout:** In Settings → Agent Behaviour → MCP Servers → **nobu**,
+set the **Network Timeout** dropdown to **5 minutes** (default is often 30s–1min).
+Also ensure `.kilo/kilo.jsonc` has `"timeout": 300000` (bootstrap writes this).
 
 Then: Settings → Agent Behaviour → MCP Servers → confirm **nobu** is enabled.
 Also supported: global `~/.config/kilo/kilo.jsonc` (Windows: `%USERPROFILE%\.config\kilo\kilo.jsonc`).

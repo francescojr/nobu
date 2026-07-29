@@ -188,6 +188,7 @@ def _print_system_install_hint(tool: str) -> None:
     if tool == "fluidsynth":
         if system == "Windows":
             print("  winget install FluidSynth.FluidSynth")
+            print("  Then restart Kilo / MCP session so PATH picks up FluidSynth.")
         elif system == "Darwin":
             print("  brew install fluidsynth")
         else:
@@ -216,6 +217,9 @@ def _offer_winget(package_id: str, label: str) -> None:
     if r.returncode != 0:
         print("  winget failed - install manually:")
         _print_system_install_hint(label)
+        return
+    if label == "fluidsynth":
+        print("  Restart Kilo / MCP session so PATH picks up FluidSynth.")
 
 
 def run_optional_install_menu(caps: dict) -> dict:
@@ -299,6 +303,15 @@ def print_welcome_banner(report: dict) -> None:
         f"  sf2     {_mode_label(modes.get('sf2'), 'ready', 'FluidSynth + your .sf2')}"
     )
 
+    fs_path = caps.get("fluidsynth_path")
+    fs_ver = caps.get("fluidsynth_version")
+    if fs_path:
+        print(f"\nFluidSynth CLI: {fs_path}")
+        if fs_ver:
+            print(f"  {fs_ver}")
+    elif not modes.get("sf2"):
+        print("\nFluidSynth: not found — sf2 mode will fall back to hybrid/chip")
+
     print("\nYour SF2 (optional - unlocks hybrid/sf2):")
     print(f"  Place your file at: {REPO_ROOT / 'assets' / 'soundfonts' / 'default.sf2'}")
     print("  Or set NOBU_SF2=/path/to/yours.sf2")
@@ -336,7 +349,7 @@ def kilo_mcp_entry() -> dict:
         "type": "local",
         "command": [str(py.resolve()), str(server.resolve())],
         "enabled": True,
-        "timeout": 120000,
+        "timeout": 300000,
     }
 
 
@@ -516,7 +529,8 @@ def print_human(report: dict) -> None:
     if all(report["imports"].values()):
         print("Next:")
         print("  1. Reload window -> enable nobu once (Settings -> MCP)")
-        print("  2. Ask your agent for music, or run:")
+        print("  2. Kilo: set MCP Network Timeout to 5 min if render times out")
+        print("  3. Ask your agent for music, or run:")
         print("     python scripts/bootstrap.py --smoke --no-prompt")
         print("  Skill: .claude/skills/game-music-producer/")
         print("  Output: output/audio/{project}/wav/ and .../ogg/")
