@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
 """
-Idempotent nobu setup. Agents: run this after cloning — no questions needed.
+Idempotent nobu setup. Agents: run with --no-prompt (no interactive menu).
 
 Usage:
   python scripts/bootstrap.py
+  python scripts/bootstrap.py --no-prompt
   python scripts/bootstrap.py --json
+  python scripts/bootstrap.py --with-render --no-prompt
+  python scripts/bootstrap.py --doctor
+  python scripts/bootstrap.py --smoke --no-prompt
   python scripts/bootstrap.py --integrate /path/to/your/game
 
 What it does:
@@ -22,7 +26,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import platform
 import shutil
 import subprocess
@@ -31,6 +34,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 MIN_PY = (3, 10)
+TINYSOUNDFONT_VERSION = "0.3.7"
 REQUIRED_PKGS = ("fastmcp", "midiutil", "mido", "numpy", "soundfile")
 DIRS = (
     REPO_ROOT / "assets" / "midi",
@@ -117,26 +121,201 @@ def verify_imports() -> dict[str, bool]:
     return results
 
 
-def optional_render_health() -> dict:
-    """Non-fatal extras for SF2/OGG pipeline (never flips report ok)."""
-    sf2 = REPO_ROOT / "assets" / "soundfonts" / "default.sf2"
-    env_sf2 = os.environ.get("NOBU_SF2") or os.environ.get("FLUID_SYNTH_SF2")
-    sf2_found = sf2.exists() or bool(env_sf2 and Path(env_sf2).exists())
-    tsf = False
+def get_capabilities_via_venv() -> dict:
+    """Run get_render_capabilities_impl inside the venv (accurate tinysoundfont check)."""
     py = venv_python()
-    if py.exists():
-        r = subprocess.run(
-            [str(py), "-c", "import tinysoundfont"],
-            capture_output=True,
-            text=True,
-        )
-        tsf = r.returncode == 0
+    if not py.exists():
+        return {}
+    script = (
+        "import json, nobu_render; "
+        "print(json.dumps(nobu_render.get_render_capabilities_impl()))"
+    )
+    r = subprocess.run(
+        [str(py), "-c", script],
+        capture_output=True,
+        text=True,
+        cwd=str(REPO_ROOT),
+    )
+    if r.returncode != 0:
+        return {}
+    try:
+        return json.loads(r.stdout.strip())
+    except json.JSONDecodeError:
+        return {}
+
+
+def optional_render_from_caps(caps: dict) -> dict:
+    """Backward-compatible booleans for --json consumers."""
     return {
-        "fluidsynth": shutil.which("fluidsynth") is not None,
-        "ffmpeg": shutil.which("ffmpeg") is not None,
-        "sf2_found": sf2_found,
-        "tinysoundfont": tsf,
+        "fluidsynth": bool(caps.get("fluidsynth")),
+        "ffmpeg": bool(caps.get("ffmpeg")),
+        "sf2_found": bool(caps.get("sf2_found")),
+        "tinysoundfont": bool(caps.get("tinysoundfont")),
     }
+
+
+def pip_install_tinysoundfont() -> bool:
+    if not venv_python().exists():
+        return False
+    r = subprocess.run(
+        [
+            *venv_pip(),
+            "install",
+            f"tinysoundfont=={TINYSOUNDFONT_VERSION}",
+        ],
+        cwd=str(REPO_ROOT),
+    )
+    return r.returncode == 0
+
+
+def run_smoke_test() -> bool | None:
+    py = venv_python()
+    if not py.exists():
+        return None
+    r = subprocess.run(
+        [str(py), str(REPO_ROOT / "scripts" / "smoke_render.py")],
+        cwd=str(REPO_ROOT),
+    )
+    return r.returncode == 0
+
+
+def _mode_label(available: bool, ready_text: str, needs_text: str) -> str:
+    return f"[ready]" if available else f"[needs {needs_text}]"
+
+
+def _print_system_install_hint(tool: str) -> None:
+    system = platform.system()
+    if tool == "fluidsynth":
+        if system == "Windows":
+            print("  winget install FluidSynth.FluidSynth")
+        elif system == "Darwin":
+            print("  brew install fluidsynth")
+        else:
+            print("  sudo apt install fluidsynth   # or your distro equivalent")
+    elif tool == "ffmpeg":
+        if system == "Windows":
+            print("  winget install Gyan.FFmpeg")
+        elif system == "Darwin":
+            print("  brew install ffmpeg")
+        else:
+            print("  sudo apt install ffmpeg")
+
+
+def _offer_winget(package_id: str, label: str) -> None:
+    if platform.system() != "Windows" or not shutil.which("winget"):
+        _print_system_install_hint(label)
+        return
+    answer = input(f"  Try winget install {package_id}? [y/N] ").strip().lower()
+    if answer != "y":
+        _print_system_install_hint(label)
+        return
+    r = subprocess.run(
+        ["winget", "install", "--id", package_id, "-e", "--accept-package-agreements"],
+        cwd=str(REPO_ROOT),
+    )
+    if r.returncode != 0:
+        print("  winget failed - install manually:")
+        _print_system_install_hint(label)
+
+
+def run_optional_install_menu(caps: dict) -> dict:
+    """Interactive optional upgrades; no-op when stdin is not a TTY."""
+    if not sys.stdin.isatty():
+        return caps
+
+    tsf_ok = caps.get("tinysoundfont", False)
+    fs_ok = caps.get("fluidsynth", False)
+    ff_ok = caps.get("ffmpeg", False)
+    needs = not tsf_ok or not fs_ok or (platform.system() == "Windows" and not ff_ok)
+    if not needs:
+        print("\nOptional upgrades: all detected - skipping menu.")
+        return caps
+
+    print("\n--- Optional upgrades (chip already works) ---")
+    print("Select numbers separated by commas, or Enter to skip:\n")
+    if not tsf_ok:
+        print("  [1] tinysoundfont (hybrid drums)  -> pip install in venv")
+    if not fs_ok:
+        print("  [2] FluidSynth (full SF2 mode)    -> system install")
+    if platform.system() == "Windows" and not ff_ok:
+        print("  [3] ffmpeg (WAV->OGG on Windows)   -> system install")
+    if not tsf_ok:
+        print("  [a] All pip optionals ([1])")
+    print("  [Enter] Continue - chip is already ready\n")
+
+    choice = input("Choice: ").strip().lower()
+    if not choice:
+        return caps
+
+    selections = set(choice.replace(" ", "").split(","))
+    if "a" in selections:
+        selections.add("1")
+
+    before = dict(caps.get("modes_available") or {})
+
+    if "1" in selections and not tsf_ok:
+        print("\nInstalling tinysoundfont...")
+        if pip_install_tinysoundfont():
+            print("  tinysoundfont installed.")
+        else:
+            print("  tinysoundfont install failed - try manually:")
+            print(f"  .venv/Scripts/pip install tinysoundfont=={TINYSOUNDFONT_VERSION}")
+
+    if "2" in selections and not fs_ok:
+        print("\nFluidSynth:")
+        _offer_winget("FluidSynth.FluidSynth", "fluidsynth")
+
+    if "3" in selections and platform.system() == "Windows" and not ff_ok:
+        print("\nffmpeg:")
+        _offer_winget("Gyan.FFmpeg", "ffmpeg")
+
+    caps = get_capabilities_via_venv()
+    after = caps.get("modes_available") or {}
+    for mode in ("chip", "hybrid", "sf2"):
+        if before.get(mode) != after.get(mode):
+            state = "available" if after.get(mode) else "unavailable"
+            print(f"  {mode}: now {state}")
+    return caps
+
+
+def print_welcome_banner(report: dict) -> None:
+    caps = report.get("capabilities") or {}
+    modes = caps.get("modes_available") or {}
+
+    print("=== nobu ===\n")
+    if all(report["imports"].values()):
+        print("READY - chip compose + render works now (no SF2 required)\n")
+    else:
+        print("INCOMPLETE - fix failed imports below\n")
+
+    print("Modes available:")
+    print(
+        f"  chip    {_mode_label(modes.get('chip', True), 'ready', '')}"
+    )
+    print(
+        f"  hybrid  {_mode_label(modes.get('hybrid'), 'ready', 'tinysoundfont + your .sf2')}"
+    )
+    print(
+        f"  sf2     {_mode_label(modes.get('sf2'), 'ready', 'FluidSynth + your .sf2')}"
+    )
+
+    print("\nYour SF2 (optional - unlocks hybrid/sf2):")
+    print(f"  Place your file at: {REPO_ROOT / 'assets' / 'soundfonts' / 'default.sf2'}")
+    print("  Or set NOBU_SF2=/path/to/yours.sf2")
+    print("  See: assets/soundfonts/README.md")
+    print("  (Repo ships no soundfonts - chip always works without one.)")
+
+    hints = caps.get("install_hints") or []
+    if hints:
+        print("\nOptional upgrades:")
+        for i, hint in enumerate(hints, 1):
+            print(f"  {i}. {hint}")
+
+    smoke = report.get("smoke_passed")
+    if smoke is True:
+        print("\nSmoke test: PASS (compose + chip render verified)")
+    elif smoke is False:
+        print("\nSmoke test: FAIL - run: python scripts/bootstrap.py --smoke --no-prompt")
 
 
 def mcp_server_entry() -> dict:
@@ -312,8 +491,8 @@ def integrate_mcp(target_dir: Path) -> list[str]:
 
 
 def print_human(report: dict) -> None:
-    print("=== nobu bootstrap ===")
-    print(f"Repo:     {report['repo_root']}")
+    print_welcome_banner(report)
+    print(f"\nRepo:     {report['repo_root']}")
     print(f"Python:   {report['python']}")
     print(f"Venv:     {report['venv_python']}")
     print(f"Created:  {', '.join(report['dirs_created']) or '(none)'}")
@@ -326,41 +505,72 @@ def print_human(report: dict) -> None:
         print("Optional render:")
         for name, ok in opt.items():
             print(f"  {'yes' if ok else 'no':4} {name}")
-        print()
-        print("Render modes:")
-        print("  chip    — always ready (no SF2)")
-        print("  hybrid  — needs tinysoundfont + .sf2 in assets/soundfonts/")
-        print("  sf2     — needs FluidSynth on PATH + .sf2")
-        if not opt.get("fluidsynth"):
-            print("  WARNING: FluidSynth not found — sf2 mode will fall back")
-        if not opt.get("sf2_found"):
-            print("  WARNING: no soundfont — hybrid/sf2 fall back to chip")
-            print("           See assets/soundfonts/README.md")
-        if not opt.get("ffmpeg") and platform.system() == "Windows":
-            print("  TIP: install ffmpeg for WAV→OGG on Windows")
     print()
-    print("Cursor project MCP (.cursor/mcp.json):")
-    print(json.dumps(report["mcp_config"], indent=2))
     if report.get("cursor_mcp_path"):
-        print(f"Wrote:    {report['cursor_mcp_path']}")
-    if report.get("kilo_config"):
-        print("\nKilo Code (.kilo/kilo.jsonc):")
-        print(json.dumps(report["kilo_config"], indent=2))
+        print(f"MCP config written: {report['cursor_mcp_path']}")
     if report.get("kilo_config_path"):
-        print(f"\nWrote: {report['kilo_config_path']}")
+        print(f"Kilo config written: {report['kilo_config_path']}")
     if report.get("integrated_mcp"):
-        print(f"\nIntegrated into: {report['integrated_mcp']}")
+        print(f"Integrated into: {report['integrated_mcp']}")
     print()
     if all(report["imports"].values()):
-        print("Status: READY — reload window, then enable nobu if Cursor shows it disabled.")
-        print("Cursor: Settings → MCP → toggle nobu ON (one-time; project .cursor/mcp.json only).")
-        print("Skill:  .claude/skills/game-music-producer/")
-        print("Kilo:   .kilo/kilo.jsonc + .kilo/rules/nobu.md")
-        print("Compose+render: MCP tools through export_midi → render_project / render_all_modes")
-        print("Output audio: output/audio/{project}/wav/ and .../ogg/")
+        print("Next:")
+        print("  1. Reload window -> enable nobu once (Settings -> MCP)")
+        print("  2. Ask your agent for music, or run:")
+        print("     python scripts/bootstrap.py --smoke --no-prompt")
+        print("  Skill: .claude/skills/game-music-producer/")
+        print("  Output: output/audio/{project}/wav/ and .../ogg/")
     else:
-        print("Status: INCOMPLETE — fix failed imports and re-run bootstrap.")
+        print("Status: INCOMPLETE - fix failed imports and re-run bootstrap.")
         sys.exit(1)
+
+
+def build_report(
+    *,
+    imports: dict[str, bool],
+    skip_install: bool,
+    venv_created: bool,
+    dirs_created: list[str],
+    integrated: list[str] | None,
+    cursor_mcp_path: str | None,
+    kilo_cfg: str | None,
+    capabilities: dict,
+    smoke_passed: bool | None,
+) -> dict:
+    optional = optional_render_from_caps(capabilities)
+    modes = capabilities.get("modes_available") or {}
+    return {
+        "ok": all(imports.values()) if not skip_install else True,
+        "ready_for_audio": bool(modes.get("chip", True)),
+        "repo_root": str(REPO_ROOT),
+        "python": sys.version.split()[0],
+        "venv_python": str(venv_python()),
+        "venv_created": venv_created,
+        "dirs_created": dirs_created,
+        "imports": imports,
+        "optional_render": optional,
+        "capabilities": capabilities,
+        "smoke_passed": smoke_passed,
+        "mcp_config": mcp_config_snippet(),
+        "cursor_mcp_path": cursor_mcp_path,
+        "kilo_config": kilo_config_snippet() if venv_python().exists() else None,
+        "kilo_config_path": kilo_cfg,
+        "skill_path": str(
+            REPO_ROOT / ".claude" / "skills" / "game-music-producer"
+        ),
+        "integrated_mcp": integrated,
+        "next_steps": [
+            "Reload Window (project .cursor/mcp.json — never global ~/.cursor/mcp.json)",
+            "Cursor: enable 'nobu' once under Settings → MCP if it appears disabled (Cursor default)",
+            "Kilo: Settings → Agent Behaviour → MCP Servers (uses .kilo/kilo.jsonc)",
+            "Confirm server 'nobu' exposes compose + render tools (see AGENTS.md)",
+            "After compose: render_project or render_all_modes for audio delivery",
+            "Read .claude/skills/game-music-producer/SKILL.md when composing",
+            "Prove audio: python scripts/bootstrap.py --smoke --no-prompt",
+            "Optional upgrades: python scripts/bootstrap.py --with-render --no-prompt",
+            "Re-check deps: python scripts/bootstrap.py --doctor",
+        ],
+    }
 
 
 def main() -> None:
@@ -380,7 +590,31 @@ def main() -> None:
         action="store_true",
         help="Only create dirs / print MCP config (no pip)",
     )
+    parser.add_argument(
+        "--no-prompt",
+        action="store_true",
+        help="Skip interactive optional-upgrade menu (use for agents/CI)",
+    )
+    parser.add_argument(
+        "--with-render",
+        action="store_true",
+        help="Install tinysoundfont in venv (hybrid mode) without prompting",
+    )
+    parser.add_argument(
+        "--doctor",
+        action="store_true",
+        help="Re-check render capabilities only (no pip install, no menu)",
+    )
+    parser.add_argument(
+        "--smoke",
+        action="store_true",
+        help="Run end-to-end compose+chip render smoke test after setup",
+    )
     args = parser.parse_args()
+
+    if args.doctor:
+        args.skip_install = True
+        args.no_prompt = True
 
     ensure_python_version()
     dirs_created = ensure_dirs()
@@ -392,6 +626,13 @@ def main() -> None:
     else:
         imports = {p: False for p in REQUIRED_PKGS}
         imports["nobu_mcp"] = (REPO_ROOT / "nobu_mcp.py").exists()
+        if venv_python().exists():
+            imports = verify_imports()
+
+    if args.with_render and venv_python().exists():
+        caps_pre = get_capabilities_via_venv()
+        if not caps_pre.get("tinysoundfont"):
+            pip_install_tinysoundfont()
 
     integrated = None
     if args.integrate:
@@ -399,7 +640,6 @@ def main() -> None:
 
     kilo_cfg = None
     cursor_mcp_path = None
-    # Project-local Cursor + Kilo configs only (never ~/.cursor/mcp.json)
     if venv_python().exists():
         snippet = json.dumps(mcp_config_snippet(), indent=2) + "\n"
         (REPO_ROOT / ".mcp.json").write_text(snippet, encoding="utf-8")
@@ -409,33 +649,31 @@ def main() -> None:
         cursor_mcp_path = str(cursor_mcp)
         kilo_cfg = str(write_kilo_config())
 
-    report = {
-        "ok": all(imports.values()) if not args.skip_install else True,
-        "repo_root": str(REPO_ROOT),
-        "python": sys.version.split()[0],
-        "venv_python": str(venv_python()),
-        "venv_created": venv_created,
-        "dirs_created": dirs_created,
-        "imports": imports,
-        "optional_render": optional_render_health(),
-        "mcp_config": mcp_config_snippet(),
-        "cursor_mcp_path": cursor_mcp_path,
-        "kilo_config": kilo_config_snippet() if venv_python().exists() else None,
-        "kilo_config_path": kilo_cfg,
-        "skill_path": str(
-            REPO_ROOT / ".claude" / "skills" / "game-music-producer"
-        ),
-        "integrated_mcp": integrated,
-        "next_steps": [
-            "Reload Window (project .cursor/mcp.json — never global ~/.cursor/mcp.json)",
-            "Cursor: enable 'nobu' once under Settings → MCP if it appears disabled (Cursor default)",
-            "Kilo: Settings → Agent Behaviour → MCP Servers (uses .kilo/kilo.jsonc)",
-            "Confirm server 'nobu' exposes compose + render tools (see AGENTS.md)",
-            "After compose: render_project or render_all_modes for audio delivery",
-            "Read .claude/skills/game-music-producer/SKILL.md when composing",
-            "Optional demo: python examples/demo_biome_ost.py && python scripts/render_midi.py",
-        ],
-    }
+    capabilities = get_capabilities_via_venv()
+    interactive = (
+        sys.stdin.isatty()
+        and not args.json
+        and not args.no_prompt
+        and venv_python().exists()
+    )
+    if interactive:
+        capabilities = run_optional_install_menu(capabilities)
+
+    smoke_passed: bool | None = None
+    if args.smoke:
+        smoke_passed = run_smoke_test()
+
+    report = build_report(
+        imports=imports,
+        skip_install=args.skip_install,
+        venv_created=venv_created,
+        dirs_created=dirs_created,
+        integrated=integrated,
+        cursor_mcp_path=cursor_mcp_path,
+        kilo_cfg=kilo_cfg,
+        capabilities=capabilities,
+        smoke_passed=smoke_passed,
+    )
 
     if args.json:
         print(json.dumps(report, indent=2))

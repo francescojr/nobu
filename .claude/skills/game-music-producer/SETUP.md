@@ -7,16 +7,19 @@
 From the repo root — creates `.venv`, installs deps, writes local `.mcp.json` with absolute paths:
 
 ```bash
-python scripts/bootstrap.py
+python scripts/bootstrap.py              # human: interactive optional-upgrade menu
+python scripts/bootstrap.py --no-prompt  # agents/CI: no menu
+python scripts/bootstrap.py --smoke --no-prompt   # prove chip render end-to-end
+python scripts/bootstrap.py --doctor   # re-check deps only
 ```
 
 Into another project (game repo):
 
 ```bash
-python scripts/bootstrap.py --integrate /absolute/path/to/game
+python scripts/bootstrap.py --integrate /absolute/path/to/game --no-prompt
 ```
 
-Agents should follow [AGENTS.md](../../../AGENTS.md) and run bootstrap without asking.
+Agents should follow [AGENTS.md](../../../AGENTS.md) and run bootstrap with `--no-prompt` without asking.
 
 ### 1. Requirements (manual)
 
@@ -187,9 +190,9 @@ nobu and this skill ship **no game-specific data**. Your game (or `examples/demo
 ### Setup recomendado (agente / um comando)
 
 ```bash
-python scripts/bootstrap.py
+python scripts/bootstrap.py --no-prompt
 # ou, num projeto de jogo:
-python scripts/bootstrap.py --integrate C:/caminho/do/jogo
+python scripts/bootstrap.py --integrate C:/caminho/do/jogo --no-prompt
 ```
 
 Siga [AGENTS.md](../../../AGENTS.md).
@@ -210,7 +213,7 @@ pip install -r requirements.txt
 
 ### Cursor
 
-Rode `python scripts/bootstrap.py` — gera `.cursor/mcp.json` + `.mcp.json` locais (gitignored). Template portable: `.mcp.example.json`. No Cursor, habilite `nobu` uma vez em Settings → MCP se vier desligado.
+Rode `python scripts/bootstrap.py --no-prompt` (agentes) ou `python scripts/bootstrap.py` (humano, menu interativo) — gera `.cursor/mcp.json` + `.mcp.json` locais (gitignored). Template portable: `.mcp.example.json`. No Cursor, habilite `nobu` uma vez em Settings → MCP se vier desligado.
 
 ### Claude Desktop
 

@@ -8,7 +8,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![Version](https://img.shields.io/badge/version-0.2.0-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.2.1-blue.svg)](CHANGELOG.md)
 [![Changelog](https://img.shields.io/badge/changelog-Keep%20a%20Changelog-orange.svg)](CHANGELOG.md)
 
 Plug nobu into **Cursor**, **Claude Desktop**, or **Kilo Code**. Ask an agent to compose a stage theme — get a real multi-track `.mid`, then render to `.ogg` / `.wav` for your engine.
@@ -26,7 +26,7 @@ nobu ships **no game-specific data**. Your project supplies tonic, mood, and bio
 
 ## Agent-ready?
 
-**Cursor / Claude Code / Kilo (opened on this repo):** yes — after clone the agent should read `AGENTS.md` / `CLAUDE.md`, run `python scripts/bootstrap.py`, reload MCP, and be ready. Rules/skills ship in-repo (`.cursor/rules`, `.claude/skills`); MCP/Kilo configs are **generated locally** by bootstrap (templates: `.mcp.example.json`, `.kilo/kilo.example.jsonc`).
+**Cursor / Claude Code / Kilo (opened on this repo):** yes — after clone the agent should read `AGENTS.md` / `CLAUDE.md`, run `python scripts/bootstrap.py --no-prompt`, reload MCP, and be ready. Humans can run `python scripts/bootstrap.py` without flags for an interactive optional-upgrade menu. Rules/skills ship in-repo (`.cursor/rules`, `.claude/skills`); MCP/Kilo configs are **generated locally** by bootstrap (templates: `.mcp.example.json`, `.kilo/kilo.example.jsonc`).
 
 **Cursor caveat:** new project MCP servers start **disabled** (Cursor security). After bootstrap + reload, toggle **nobu** on once under Settings → MCP (or Customize → MCP). Stays on for that workspace afterward — we cannot force-enable from the repo.
 
@@ -38,8 +38,8 @@ nobu ships **no game-specific data**. Your project supplies tonic, mood, and bio
 
 ```text
 Clone https://github.com/francescojr/nobu.git (sibling folder or into this workspace).
-Read AGENTS.md (and CLAUDE.md if present) and run: python scripts/bootstrap.py
-If this is a game project, also run: python scripts/bootstrap.py --integrate <this_project_root>
+Read AGENTS.md (and CLAUDE.md if present) and run: python scripts/bootstrap.py --no-prompt
+If this is a game project, also run: python scripts/bootstrap.py --integrate <this_project_root> --no-prompt
 Reload MCP. In Cursor, enable server "nobu" if it is disabled (Settings → MCP).
 Confirm tools: compose (start_project … export_midi) + render (render_project / render_all_modes).
 Then follow .claude/skills/game-music-producer/ — deliver MIDI and audio when I ask.
@@ -49,11 +49,54 @@ Integrating into an existing game:
 
 ```text
 Set up https://github.com/francescojr/nobu as our game-music MCP.
-Clone it next to this repo, run python scripts/bootstrap.py --integrate <absolute path to this project>,
+Clone it next to this repo, run python scripts/bootstrap.py --integrate <absolute path to this project> --no-prompt,
 reload MCP, and confirm tools work. Do not hardcode our game data into nobu.
 ```
 
 Agents follow [AGENTS.md](AGENTS.md). Bootstrap rewrites project-local `.cursor/mcp.json` + `.mcp.json` + `.kilo/kilo.jsonc` to the local venv (never global Cursor MCP).
+
+---
+
+## Fastest path to sound
+
+**Human (interactive menu for optional upgrades):**
+
+```bash
+git clone https://github.com/francescojr/nobu.git
+cd nobu
+python scripts/bootstrap.py
+# → optional menu for tinysoundfont / FluidSynth / ffmpeg hints
+# → reload Cursor/Kilo → enable nobu once → ask your agent for music
+```
+
+**Agent / CI (no prompts):**
+
+```bash
+python scripts/bootstrap.py --no-prompt
+```
+
+**Prove audio works (no MCP):**
+
+```bash
+python scripts/bootstrap.py --no-prompt --smoke
+```
+
+**Optional upgrades later:**
+
+```bash
+python scripts/bootstrap.py --with-render --no-prompt   # hybrid drums (pip)
+python scripts/bootstrap.py --doctor                    # re-check deps
+# SF2: copy your .sf2 → assets/soundfonts/default.sf2 (see assets/soundfonts/README.md)
+```
+
+### Works out of the box vs optional
+
+| After bootstrap | Works? |
+|---|---|
+| Compose + render **chip** via MCP | Yes |
+| Render **hybrid** | Needs `tinysoundfont` + your `.sf2` |
+| Render **sf2** | Needs FluidSynth CLI + your `.sf2` |
+| OGG on Windows | `ffmpeg` recommended (WAV always works) |
 
 ---
 
@@ -63,7 +106,7 @@ Agents follow [AGENTS.md](AGENTS.md). Bootstrap rewrites project-local `.cursor/
 git clone https://github.com/francescojr/nobu.git
 cd nobu
 python scripts/bootstrap.py
-# creates .venv, installs deps, writes .cursor/mcp.json, verifies imports
+# creates .venv, installs deps, writes .cursor/mcp.json, optional upgrade menu
 ```
 
 Then reload MCP. In **Cursor**: Settings → MCP → enable **nobu** once if disabled. Full notes: [SETUP.md](.claude/skills/game-music-producer/SETUP.md).
@@ -143,14 +186,15 @@ Mood keys: `safe_exploration`, `heroic_exploration`, `nostalgic_town`, `melancho
 
 ## SoundFonts
 
-Place a General MIDI or chiptune `.sf2` at:
+Place **your own** `.sf2` at:
 
 ```
 assets/soundfonts/default.sf2
 ```
 
-Free SNES-style banks: [williamkage.com/snes_soundfonts](https://www.williamkage.com/snes_soundfonts/).  
-Without a soundfont, `render_midi.py` still works via its built-in NES-style synth.
+Or set `NOBU_SF2=/path/to/yours.sf2`. Re-check: `python scripts/bootstrap.py --doctor` or MCP `get_render_capabilities`.
+
+Without a soundfont, chip render **always works** via the built-in NES-style synth. Hybrid/sf2 modes fall back to chip until you add a soundfont.
 
 ---
 
@@ -191,8 +235,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.
 
 ```text
 Clone https://github.com/francescojr/nobu.git.
-Leia nobu/AGENTS.md e rode: python scripts/bootstrap.py
-Se for um projeto de jogo, rode também: python scripts/bootstrap.py --integrate <raiz_deste_projeto>
+Leia nobu/AGENTS.md e rode: python scripts/bootstrap.py --no-prompt
+Se for um projeto de jogo, rode também: python scripts/bootstrap.py --integrate <raiz_deste_projeto> --no-prompt
 Recarregue o MCP, confirme o server "nobu" (14 tools: compose + render).
 Siga .claude/skills/game-music-producer/ — compose e render quando eu pedir.
 ```
@@ -202,7 +246,8 @@ Siga .claude/skills/game-music-producer/ — compose e render quando eu pedir.
 ```bash
 git clone https://github.com/francescojr/nobu.git
 cd nobu
-python scripts/bootstrap.py
+python scripts/bootstrap.py          # humano: menu interativo de optionals
+python scripts/bootstrap.py --no-prompt --smoke   # agente: prova chip sem MCP
 python examples/demo_biome_ost.py
 python scripts/render_midi.py --mode chip   # funciona sem SF2
 ```

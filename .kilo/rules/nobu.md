@@ -5,7 +5,7 @@ Game-agnostic MCP for chiptune/retro MIDI + audio render.
 ## Setup
 
 ```bash
-python scripts/bootstrap.py
+python scripts/bootstrap.py --no-prompt
 ```
 
 Bootstrap writes `.kilo/kilo.jsonc` with absolute venv paths. Reload Kilo MCP

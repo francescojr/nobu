@@ -12,7 +12,7 @@ This workspace is **nobu**: game-agnostic MCP for chiptune/retro MIDI + audio re
 **Mandatory — do not ask:**
 
 ```bash
-python scripts/bootstrap.py
+python scripts/bootstrap.py --no-prompt
 ```
 
 Read [AGENTS.md](AGENTS.md) and [CLAUDE.md](CLAUDE.md). Prefer `python scripts/bootstrap.py --json` → `"ok": true`, then ask the user to reload MCP if tools are not visible.
@@ -36,7 +36,7 @@ Follow `references/mcp-integration.md`.
 ## Integrating into another project
 
 ```bash
-python scripts/bootstrap.py --integrate /absolute/path/to/game
+python scripts/bootstrap.py --integrate /absolute/path/to/game --no-prompt
 ```
 
 Keep nobu game-agnostic — never hardcode a specific game's biomes into the server.

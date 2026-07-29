@@ -8,7 +8,7 @@ You are in the **nobu** repo (game-agnostic MCP for chiptune/retro MIDI).
 2. From the repo root, run:
 
    ```bash
-   python scripts/bootstrap.py
+   python scripts/bootstrap.py --no-prompt
    ```
 
 3. Tell the user to reload MCP / restart the client if tools are not visible yet.

@@ -207,7 +207,8 @@ def list_soundfonts_impl() -> dict:
     if not found:
         note = (
             "No SF2 in assets/soundfonts/. Chip mode always works. "
-            "Add default.sf2 or set NOBU_SF2."
+            "Copy your .sf2 to assets/soundfonts/default.sf2 or set NOBU_SF2. "
+            "Re-check: python scripts/bootstrap.py --doctor"
         )
     return {"soundfonts": found, "note": note}
 
@@ -837,4 +838,7 @@ def render_midi_file(
     result["ogg"] = chip_out.get("ogg")
     if chip_out.get("ogg_skipped_reason"):
         result["ogg_skipped_reason"] = chip_out["ogg_skipped_reason"]
+    if result.get("fallback_reason"):
+        caps = get_render_capabilities_impl()
+        result["install_hints"] = caps.get("install_hints", [])
     return result

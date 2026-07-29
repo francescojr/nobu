@@ -15,7 +15,7 @@ Thanks for helping make game audio tooling better.
 ### Local setup
 
 ```bash
-python scripts/bootstrap.py
+python scripts/bootstrap.py --no-prompt
 # or manually:
 python -m venv .venv
 # Windows: .venv\Scripts\activate
@@ -71,7 +71,7 @@ Those files are **gitignored** — `git add -A` will not stage them:
 | `.cursor/mcp.json`, `.mcp.json` | `.mcp.example.json` |
 | `.kilo/kilo.jsonc` | `.kilo/kilo.example.jsonc` |
 
-Clones get working MCP/Kilo after `python scripts/bootstrap.py` (mandatory; see AGENTS.md).
+Clones get working MCP/Kilo after `python scripts/bootstrap.py --no-prompt` (mandatory; see AGENTS.md).
 
 ### Code of conduct
 
@@ -92,7 +92,7 @@ By participating, you agree to follow [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
 ### Setup local
 
 ```bash
-python scripts/bootstrap.py
+python scripts/bootstrap.py --no-prompt
 ```
 
 

@@ -139,10 +139,34 @@ else:
 print("\n7. Version sync")
 pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
 changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
-if 'version = "0.2.0"' in pyproject and "## [0.2.0]" in changelog:
-    ok("pyproject + CHANGELOG 0.2.0")
+if 'version = "0.2.1"' in pyproject and "## [0.2.1]" in changelog:
+    ok("pyproject + CHANGELOG 0.2.1")
 else:
     fail("version mismatch pyproject/CHANGELOG")
+
+# 8. Bootstrap JSON report
+print("\n8. Bootstrap JSON")
+import subprocess
+
+r = subprocess.run(
+    [sys.executable, str(ROOT / "scripts" / "bootstrap.py"), "--json", "--no-prompt", "--skip-install"],
+    capture_output=True,
+    text=True,
+    cwd=str(ROOT),
+)
+if r.returncode != 0:
+    fail(f"bootstrap --json failed: {r.stderr[:200]}")
+else:
+    try:
+        boot = json.loads(r.stdout)
+    except json.JSONDecodeError:
+        fail("bootstrap --json invalid JSON")
+    else:
+        for key in ("capabilities", "ready_for_audio", "optional_render"):
+            if key in boot:
+                ok(f"bootstrap report has {key}")
+            else:
+                fail(f"bootstrap report missing {key}")
 
 print("\n=== summary ===")
 if failures:

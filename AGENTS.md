@@ -16,8 +16,10 @@ Trigger this checklist when: the user says install/setup/use nobu, the repo was 
 1. **Bootstrap** (from repo root):
 
    ```bash
-   python scripts/bootstrap.py
+   python scripts/bootstrap.py --no-prompt
    ```
+
+   Humans may run `python scripts/bootstrap.py` without flags for an interactive optional-upgrade menu.
 
    This creates `.venv`, installs deps, ensures folders, verifies imports, and rewrites
    project-local `.cursor/mcp.json` + `.mcp.json` (Cursor) and `.kilo/kilo.jsonc` (Kilo)
@@ -26,13 +28,21 @@ Trigger this checklist when: the user says install/setup/use nobu, the repo was 
    Integrate into a game project:
 
    ```bash
-   python scripts/bootstrap.py --integrate /absolute/path/to/game
+   python scripts/bootstrap.py --integrate /absolute/path/to/game --no-prompt
    ```
 
    Machine-readable status:
 
    ```bash
-   python scripts/bootstrap.py --json
+   python scripts/bootstrap.py --json --no-prompt
+   ```
+
+   Optional flags:
+
+   ```bash
+   python scripts/bootstrap.py --with-render --no-prompt   # tinysoundfont (hybrid)
+   python scripts/bootstrap.py --doctor                   # re-check deps, no pip/menu
+   python scripts/bootstrap.py --smoke --no-prompt        # end-to-end chip render proof
    ```
 
 2. **Reload MCP** so the client picks up the rewritten config:
@@ -105,7 +115,7 @@ Prefer delivering real `.mid` under `assets/midi/` **and audio** under `output/a
 ## Integrating into a user's game
 
 - Clone this repo (sibling folder, submodule, or vendor path).
-- Run `python scripts/bootstrap.py --integrate <game_root>` so the game gets `.mcp.json` with **absolute** paths to nobu's venv Python + `nobu_mcp.py`.
+- Run `python scripts/bootstrap.py --integrate <game_root> --no-prompt` so the game gets `.mcp.json` with **absolute** paths to nobu's venv Python + `nobu_mcp.py`.
 - Do **not** copy game biome/mood data into nobu — keep mapping in the game.
 - Point the game's runtime audio loader at files copied from `output/audio/{project}/wav/` or `.../ogg/` (or your chosen build step).
 
