@@ -140,8 +140,8 @@ else:
 print("\n7. Version sync")
 pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
 changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
-if 'version = "0.2.3"' in pyproject and "## [0.2.3]" in changelog:
-    ok("pyproject + CHANGELOG 0.2.3")
+if 'version = "0.2.4"' in pyproject and "## [0.2.4]" in changelog:
+    ok("pyproject + CHANGELOG 0.2.4")
 else:
     fail("version mismatch pyproject/CHANGELOG")
 
@@ -201,6 +201,19 @@ for key in ("fluidsynth_path", "fluidsynth_version"):
         ok(f"capabilities has {key}")
     else:
         fail(f"capabilities missing {key}")
+
+# 12. Progress scale
+print("\n12. Progress scale")
+r = subprocess.run(
+    [sys.executable, str(ROOT / "scripts" / "test_progress_scale.py")],
+    capture_output=True,
+    text=True,
+    cwd=str(ROOT),
+)
+if r.returncode == 0:
+    ok("render_all_modes global progress scale")
+else:
+    fail(f"test_progress_scale: {r.stdout.strip()} {r.stderr.strip()}")
 
 print("\n=== summary ===")
 if failures:

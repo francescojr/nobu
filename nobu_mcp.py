@@ -190,6 +190,37 @@ def _make_progress_callback(ctx: Context | None):
     return on_progress
 
 
+def _scale_progress(mode_index: int, mode_count: int, local_pct: float) -> float:
+    base = mode_index / mode_count
+    span = 1.0 / mode_count
+    return min(base + local_pct * span, 1.0)
+
+
+def _make_scaled_progress_callback(
+    ctx: Context | None,
+    mode_name: str,
+    mode_index: int,
+    mode_count: int = 3,
+):
+    inner = _make_progress_callback(ctx)
+
+    def on_progress(stage: str, local_pct: float) -> None:
+        global_pct = _scale_progress(mode_index, mode_count, local_pct)
+        inner(f"mode_{mode_name}:{stage}", global_pct)
+
+    return on_progress
+
+
+def _report_mode_boundary(ctx: Context | None, message: str, pct: float) -> None:
+    if ctx is None:
+        print(f"[nobu render] {message} ({pct:.0%})", file=sys.stderr, flush=True)
+        return
+    try:
+        ctx.report_progress(progress=pct, total=1.0, message=message)
+    except Exception:
+        pass
+
+
 def _render_project_impl(
     project_name: str,
     mode: str = "auto",
@@ -198,12 +229,14 @@ def _render_project_impl(
     destination_dir: str | None = None,
     filename_stem: str | None = None,
     ctx: Context | None = None,
+    on_progress=None,
 ) -> dict:
     import nobu_render
 
     midi_path = _ensure_midi_path(project_name)
     out_root = destination_dir if destination_dir else _default_output_dir()
     stem = filename_stem or project_name
+    progress_cb = on_progress if on_progress is not None else _make_progress_callback(ctx)
     return nobu_render.render_midi_file(
         midi_path,
         mode,
@@ -213,7 +246,7 @@ def _render_project_impl(
         project_name=project_name,
         filename_stem=stem,
         quiet=True,
-        on_progress=_make_progress_callback(ctx),
+        on_progress=progress_cb,
     )
 
 
@@ -651,10 +684,13 @@ def render_all_modes(
     Always report mode_effective, fallback_reason, and quality_warnings per mode.
     """
     modes = ("chip", "hybrid", "sf2")
+    mode_count = len(modes)
     out: dict = {"project": project_name, "modes": {}}
     all_quality: list[str] = []
+    modes_completed: list[str] = []
     t0 = time.perf_counter()
-    for m in modes:
+    for i, m in enumerate(modes):
+        _report_mode_boundary(ctx, f"mode_{m}_start", i / mode_count)
         result = _render_project_impl(
             project_name,
             m,
@@ -663,7 +699,10 @@ def render_all_modes(
             destination_dir,
             f"{project_name}_{m}",
             ctx=ctx,
+            on_progress=_make_scaled_progress_callback(ctx, m, i, mode_count),
         )
+        modes_completed.append(m)
+        _report_mode_boundary(ctx, f"mode_{m}_done", (i + 1) / mode_count)
         out["modes"][m] = result
         for w in result.get("quality_warnings") or []:
             all_quality.append(f"{m}: {w}")
@@ -673,6 +712,7 @@ def render_all_modes(
 
     if all_quality:
         out["quality_warnings"] = all_quality
+    out["progress_modes_completed"] = modes_completed
     out["render_duration_sec"] = round(time.perf_counter() - t0, 3)
     return json.dumps(out, ensure_ascii=False, indent=2)
 

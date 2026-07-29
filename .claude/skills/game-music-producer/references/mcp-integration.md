@@ -40,7 +40,7 @@ Always follow this order:
    - **`render_chip(project_name)`** — **preferred first delivery** (fast, no SF2).
    - **`render_project(project_name, mode)`** — single mode (`chip` | `hybrid` | `sf2` | `auto`).
    - **`render_hybrid` / `render_sf2`** — explicit mode shortcuts.
-   - **`render_all_modes(project_name)`** — only when user asks to compare all three (slow, up to ~3 min).
+   - **`render_all_modes(project_name)`** — only when user asks to compare all three (slow, up to ~3 min). Emits **global** MCP progress: `mode_chip_start` → `mode_chip:…` → `mode_chip_done` → hybrid → sf2 (0→1, no reset to 10% per mode). Still one blocking call — keep Kilo timeout at 5 min.
 
 After every render, read **`mode_effective`**, **`fallback_reason`**, and **`quality_warnings`** in the JSON. Do not report “SF2 delivered” if `mode_effective` is not `sf2` or if `quality_warnings` is non-empty.
 

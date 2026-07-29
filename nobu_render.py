@@ -541,16 +541,23 @@ def _melodic_waveform(phase: np.ndarray, wt: str, duty: float) -> np.ndarray:
     return np.where(phase < 0.5, 1.0, -1.0).astype(np.float32)
 
 
-def render_melodic(mel_tracks: list) -> np.ndarray:
+def render_melodic(
+    mel_tracks: list,
+    on_note_progress: Callable[[float], None] | None = None,
+) -> np.ndarray:
     if not mel_tracks:
         return np.zeros(1, dtype=np.float32)
 
     total_dur = 0.0
+    total_notes = 0
     for t in mel_tracks:
+        total_notes += len(t["notes"])
         for n in t["notes"]:
             total_dur = max(total_dur, n["start_sec"] + n["dur_sec"])
     total_samples = int(total_dur * CHIP_SR) + CHIP_SR
     mixed = np.zeros(total_samples, dtype=np.float32)
+    progress_stride = max(1, total_notes // 10) if total_notes else 1
+    notes_done = 0
 
     for t in mel_tracks:
         prog = t["program"]
@@ -585,6 +592,10 @@ def render_melodic(mel_tracks: list) -> np.ndarray:
                 n_s = total_samples - start
             if n_s > 0:
                 mixed[start : start + n_s] += buf[:n_s]
+            notes_done += 1
+            if on_note_progress and total_notes > 0:
+                if notes_done % progress_stride == 0 or notes_done == total_notes:
+                    on_note_progress(notes_done / total_notes)
 
     return mixed
 
@@ -856,7 +867,15 @@ def render_chip_or_hybrid(
     if not quiet:
         print("Melodic via chiptune...", end=" ", flush=True)
     _emit_progress(on_progress, stage_log, "synthesizing_melodic", 0.6)
-    melodic = render_melodic(data["melodic"])
+
+    def _melodic_sub_progress(sub: float) -> None:
+        if on_progress:
+            on_progress("synthesizing_melodic", 0.6 + 0.2 * sub)
+
+    melodic = render_melodic(
+        data["melodic"],
+        on_note_progress=_melodic_sub_progress if on_progress else None,
+    )
     if not quiet:
         print(f"peak={float(np.max(np.abs(melodic))):.3f}")
 
