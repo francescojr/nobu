@@ -1,5 +1,5 @@
 ---
-description: nobu MCP toolkit — bootstrap, paths, and compose workflow for agents
+description: nobu MCP toolkit — bootstrap, paths, compose + render workflow
 alwaysApply: true
 ---
 
@@ -21,13 +21,17 @@ Read [AGENTS.md](AGENTS.md) and [CLAUDE.md](CLAUDE.md). Prefer `python scripts/b
 
 - MIDI → `assets/midi/`
 - SoundFonts → `assets/soundfonts/`
-- Rendered audio → `output/audio/`
+- Rendered audio → `output/audio/{project_name}/wav/` and `.../ogg/`
 - MCP server id → `nobu` (`nobu_mcp.py`)
 - Skill → `.claude/skills/game-music-producer/`
 
 ## When composing music
 
-Use nobu MCP tools in order: `start_project` → `suggest_scale_for_mood` → `add_layer` → `list_layers` → `export_midi`. Deliver real `.mid` files. Follow `references/mcp-integration.md`.
+Use nobu MCP tools: `start_project` → `suggest_scale_for_mood` → `add_layer` → `list_layers` → `export_midi` → **render** (`render_project`, `render_chip`, `render_hybrid`, `render_sf2`, or `render_all_modes`).
+
+If the user asks for audio or multiple versions (chip/hybrid/sf2), **never stop at MIDI**. Call `get_render_capabilities` before promising SF2.
+
+Follow `references/mcp-integration.md`.
 
 ## Integrating into another project
 

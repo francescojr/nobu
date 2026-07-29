@@ -46,15 +46,14 @@ Trigger this checklist when: the user says install/setup/use nobu, the repo was 
      using **absolute** paths, then fully quit Claude Desktop
 
 3. **Verify** server id `nobu` (Cursor may show `project-*-nobu`) and tools:
-   - `start_project`
-   - `suggest_scale_for_mood`
-   - `generate_scale`
-   - `add_layer`
-   - `set_tempo_change`
-   - `list_layers`
-   - `export_midi`
 
-4. **Load the skill** `.claude/skills/game-music-producer/` (`SKILL.md` + `references/mcp-integration.md`) before composing.
+   **Compose:** `start_project`, `suggest_scale_for_mood`, `generate_scale`, `add_layer`, `set_tempo_change`, `list_layers`, `export_midi`
+
+   **Render:** `render_project`, `render_chip`, `render_hybrid`, `render_sf2`, `render_all_modes`
+
+   **Discovery:** `get_render_capabilities`, `list_soundfonts`
+
+4. **Load the skill** `.claude/skills/game-music-producer/` (`SKILL.md` + `references/mcp-integration.md`) before composing. Kilo loads these via `.kilo/kilo.jsonc` `instructions`; Cursor uses `.cursor/rules/nobu.mdc` + skill paths.
 
 5. Tell the user **ready**. Optional smoke:
 
@@ -70,7 +69,7 @@ Trigger this checklist when: the user says install/setup/use nobu, the repo was 
 |---|---|
 | MIDI | `assets/midi/` |
 | SoundFonts | `assets/soundfonts/` (`default.sf2` optional) |
-| Rendered audio | `output/audio/` |
+| Rendered audio | `output/audio/{project}/wav/` and `.../ogg/` |
 | MCP entrypoint | `nobu_mcp.py` |
 | Bootstrap | `scripts/bootstrap.py` |
 
@@ -99,16 +98,16 @@ Never treat missing SF2 as a fatal error — fall back and tell the user.
 
 Follow `.claude/skills/game-music-producer/references/mcp-integration.md`:
 
-1. `start_project` → 2. `suggest_scale_for_mood` → 3. `add_layer` (×N) → 4. `list_layers` → 5. `export_midi`
+1. `start_project` → 2. `suggest_scale_for_mood` → 3. `add_layer` (×N) → 4. `list_layers` → 5. `export_midi` → 6. **render** (`render_project` or `render_all_modes` when user wants audio)
 
-Prefer delivering a real `.mid` under `assets/midi/` over text-only description.
+Prefer delivering real `.mid` under `assets/midi/` **and audio** under `output/audio/{project}/` when requested — never stop at MIDI alone.
 
 ## Integrating into a user's game
 
 - Clone this repo (sibling folder, submodule, or vendor path).
 - Run `python scripts/bootstrap.py --integrate <game_root>` so the game gets `.mcp.json` with **absolute** paths to nobu's venv Python + `nobu_mcp.py`.
 - Do **not** copy game biome/mood data into nobu — keep mapping in the game.
-- Point the game's runtime audio loader at files copied from `output/audio/` (or your chosen build step).
+- Point the game's runtime audio loader at files copied from `output/audio/{project}/wav/` or `.../ogg/` (or your chosen build step).
 
 ## Changelog session hook
 
@@ -134,5 +133,5 @@ Do not reintroduce an Unreleased section. Edit version bullets by hand if the au
 ## Success criteria
 
 - `python scripts/bootstrap.py --json` reports `"ok": true`
-- MCP client shows server `nobu` with the 7 tools
-- `export_midi` writes under `assets/midi/`
+- MCP client shows server `nobu` with compose + render tools (14 total)
+- `export_midi` writes under `assets/midi/`; render tools write under `output/audio/{project}/`

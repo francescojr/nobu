@@ -8,17 +8,18 @@ Baseado em práticas de produção de game audio e documentação de integraçã
 |---|---|
 | MIDI (MCP / examples) | `assets/midi/` |
 | SoundFonts (`.sf2`) | `assets/soundfonts/` |
-| Rendered `.ogg` / `.wav` | `output/audio/` |
+| Rendered `.ogg` / `.wav` | `output/audio/{project}/wav/` and `.../ogg/` |
 
 ```bash
 # Compose (demo or via nobu MCP export_midi)
 python examples/demo_biome_ost.py
 
-# Render all MIDI → OGG
+# Render all MIDI → OGG/WAV (or use MCP render_project / render_all_modes)
+python scripts/render_midi.py --mode chip
 python scripts/render_midi.py --soundfont assets/soundfonts/default.sf2
 ```
 
-Copy finished audio from `output/audio/` into your game's runtime path
+Copy finished audio from `output/audio/{project}/` into your game's runtime path
 (e.g. `res://audio/music/` in Godot, `Assets/Audio/Music/` in Unity).
 
 ## 1. Pipeline padrão de produção de trilha para jogo

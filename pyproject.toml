@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nobu"
-version = "0.1.6"
+version = "0.2.0"
 description = "Game-agnostic MCP server and toolkit for composing chiptune/retro MIDI and rendering game audio"
 readme = "README.md"
 license = { text = "MIT" }
@@ -37,4 +37,4 @@ Repository = "https://github.com/francescojr/nobu"
 Changelog = "https://github.com/francescojr/nobu/blob/main/CHANGELOG.md"
 
 [tool.setuptools]
-py-modules = ["nobu_mcp"]
+py-modules = ["nobu_mcp", "nobu_render"]

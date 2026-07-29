@@ -39,6 +39,9 @@ _REPO_ROOT = Path(__file__).resolve().parent
 _DEFAULT_MIDI_DIR = Path(
     os.environ.get("NOBU_MIDI_DIR", str(_REPO_ROOT / "assets" / "midi"))
 )
+_DEFAULT_OUTPUT_DIR = Path(
+    os.environ.get("NOBU_OUTPUT_DIR", str(_REPO_ROOT / "output" / "audio"))
+)
 
 # ─── GM Drum Map (EN primary + PT aliases) ──────────────────────────
 GM_DRUM_MAP = {
@@ -150,6 +153,49 @@ def _default_midi_dir() -> str:
     return str(_DEFAULT_MIDI_DIR)
 
 
+def _default_output_dir() -> str:
+    return str(_DEFAULT_OUTPUT_DIR)
+
+
+def _ensure_midi_path(project_name: str) -> str:
+    """Return absolute path to project MIDI, exporting from memory if needed."""
+    midi_path = _DEFAULT_MIDI_DIR / f"{project_name}.mid"
+    if midi_path.exists():
+        return str(midi_path.resolve())
+    if project_name in _PROJECTS:
+        export_midi(project_name)
+        if midi_path.exists():
+            return str(midi_path.resolve())
+    raise ValueError(
+        f"No MIDI at {midi_path}. Call export_midi first or compose via start_project."
+    )
+
+
+def _render_project_impl(
+    project_name: str,
+    mode: str = "auto",
+    soundfont: str | None = None,
+    loop_beats: float = 0,
+    destination_dir: str | None = None,
+    filename_stem: str | None = None,
+) -> dict:
+    import nobu_render
+
+    midi_path = _ensure_midi_path(project_name)
+    out_root = destination_dir if destination_dir else _default_output_dir()
+    stem = filename_stem or project_name
+    return nobu_render.render_midi_file(
+        midi_path,
+        mode,
+        soundfont=soundfont,
+        loop_beats=loop_beats,
+        output_root=out_root,
+        project_name=project_name,
+        filename_stem=stem,
+        quiet=True,
+    )
+
+
 def _normalize_scale(scale_type: str) -> str:
     if scale_type not in SCALES:
         raise ValueError(
@@ -238,7 +284,7 @@ def add_layer(
     project_name: str,
     layer_name: str,
     layer_type: str,
-    notes: list[list[float]],
+    notes: list[list[float | str | int]],
     midi_channel: int = 0,
     chiptune_program: str = "pulse_lead",
     swing_offset: float = 0.0,
@@ -401,10 +447,14 @@ def export_midi(
     project_name: str, destination_dir: str | None = None
 ) -> str:
     """
-    Render all project layers into a single multi-track .mid file.
+    Export all project layers into a single multi-track .mid file.
     Call last, after all add_layer calls. Returns loop metadata (beats
     and bars) for configuring loop points in the engine (Godot/Unity/
     FMOD/Wwise), since MIDI does not store that natively.
+
+    After export, call render_project, render_chip, render_hybrid,
+    render_sf2, or render_all_modes to produce audio under
+    output/audio/{project_name}/wav/ and .../ogg/.
 
     Default destination_dir is assets/midi/ (or NOBU_MIDI_DIR).
     """
@@ -455,8 +505,137 @@ def export_midi(
             "MIDI does not store a native loop point. "
             "Use these beat/bar values to configure looping in your engine."
         ),
+        "next_step": (
+            f"Call render_project('{project_name}', mode='chip') or "
+            f"render_all_modes('{project_name}') for audio in "
+            f"output/audio/{project_name}/"
+        ),
     }
     return json.dumps(metadata, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def get_render_capabilities() -> dict:
+    """
+    Report render pipeline health: FluidSynth, ffmpeg, tinysoundfont,
+    available soundfonts, and which modes (chip/hybrid/sf2) will work.
+    Call before promising SF2/hybrid audio to the user.
+    """
+    import nobu_render
+
+    return nobu_render.get_render_capabilities_impl()
+
+
+@mcp.tool()
+def list_soundfonts() -> dict:
+    """
+    List .sf2 files in assets/soundfonts/ plus NOBU_SF2 env override.
+    The repo ships no soundfonts by default — chip mode always works.
+    """
+    import nobu_render
+
+    return nobu_render.list_soundfonts_impl()
+
+
+@mcp.tool()
+def render_project(
+    project_name: str,
+    mode: str = "auto",
+    soundfont: str | None = None,
+    loop_beats: float = 0,
+    destination_dir: str | None = None,
+) -> str:
+    """
+    Render exported MIDI to WAV/OGG. mode: chip | hybrid | sf2 | auto.
+    Output: output/audio/{project_name}/wav/ and .../ogg/.
+    Exports MIDI first if the project exists in memory but .mid is missing.
+    Use render_all_modes when the user wants chip + hybrid + sf2 together.
+    """
+    result = _render_project_impl(
+        project_name, mode, soundfont, loop_beats, destination_dir
+    )
+    return json.dumps(result, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def render_chip(
+    project_name: str,
+    loop_beats: float = 0,
+    destination_dir: str | None = None,
+) -> str:
+    """
+    Render pure chiptune (no SF2). Same as render_project(mode='chip').
+    Use render_all_modes if the user wants chip + hybrid + sf2 in one call.
+    """
+    result = _render_project_impl(
+        project_name, "chip", None, loop_beats, destination_dir
+    )
+    return json.dumps(result, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def render_hybrid(
+    project_name: str,
+    soundfont: str | None = None,
+    loop_beats: float = 0,
+    destination_dir: str | None = None,
+) -> str:
+    """
+    Render SF2 drums + chiptune melodic. Falls back to chip if SF2/tsf missing.
+    Use render_all_modes for all three versions at once.
+    """
+    result = _render_project_impl(
+        project_name, "hybrid", soundfont, loop_beats, destination_dir
+    )
+    return json.dumps(result, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def render_sf2(
+    project_name: str,
+    soundfont: str | None = None,
+    loop_beats: float = 0,
+    destination_dir: str | None = None,
+) -> str:
+    """
+    Render full SoundFont via FluidSynth. Falls back to hybrid or chip.
+    Requires FluidSynth on PATH and a .sf2 file. Use get_render_capabilities
+    to check availability first.
+    """
+    result = _render_project_impl(
+        project_name, "sf2", soundfont, loop_beats, destination_dir
+    )
+    return json.dumps(result, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def render_all_modes(
+    project_name: str,
+    soundfont: str | None = None,
+    destination_dir: str | None = None,
+) -> str:
+    """
+    Render chip, hybrid, and sf2 versions in one call (boss fight / compare modes).
+    Output files: {project}_chip, {project}_hybrid, {project}_sf2 under
+    output/audio/{project_name}/wav/ and .../ogg/. May take up to ~2 minutes.
+    """
+    modes = ("chip", "hybrid", "sf2")
+    out: dict = {"project": project_name, "modes": {}}
+    for m in modes:
+        result = _render_project_impl(
+            project_name,
+            m,
+            soundfont,
+            0,
+            destination_dir,
+            f"{project_name}_{m}",
+        )
+        out["modes"][m] = result
+        if "output_dir" not in out:
+            out["output_dir"] = result.get("output_dir")
+            out["midi_file"] = result.get("midi_file")
+
+    return json.dumps(out, ensure_ascii=False, indent=2)
 
 
 def main() -> None:

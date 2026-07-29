@@ -16,7 +16,7 @@ Demo biome params (replace with your game's data):
 
 Output: assets/midi/biome{N}_{calm,combat}.mid
 
-Then run: python scripts/render_midi.py  →  output/audio/*.ogg
+Then run: python scripts/render_midi.py  →  output/audio/{project}/wav|ogg/
 """
 
 from midiutil import MIDIFile

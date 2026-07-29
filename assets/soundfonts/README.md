@@ -34,6 +34,8 @@ export NOBU_SF2=/path/to/your.sf2
 
 \*If SF2 / FluidSynth / tinysoundfont is missing, nobu **falls back to chip** instead of erroring.
 
+Output layout: `output/audio/{project_name}/wav/` and `output/audio/{project_name}/ogg/`.
+
 ```bash
 python scripts/render_midi.py --mode chip
 python scripts/render_midi.py --mode sf2 --soundfont assets/soundfonts/default.sf2
@@ -52,6 +54,6 @@ Full SF2 needs the **FluidSynth** CLI on PATH. nobu renders SF2 to WAV, then con
 
 ## Português
 
-Coloque `.sf2` aqui. Sem soundfont o chiptune puro **já gera áudio**.  
+Coloque `.sf2` aqui. Sem soundfont o chiptune puro **já gera áudio** em `output/audio/{project}/wav|ogg/`.  
 Modos: `chip` (puro), `hybrid` (SF2 drums + chip), `sf2` (SoundFont completo).  
 Se faltar SF2/FluidSynth, o nobu faz fallback para chiptune — não quebra.

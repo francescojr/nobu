@@ -28,7 +28,7 @@ python nobu_mcp.py
 
 - MIDI output: `assets/midi/`
 - SoundFonts: `assets/soundfonts/` (do **not** commit `.sf2` files)
-- Rendered audio: `output/audio/`
+- Rendered audio: `output/audio/{project}/wav/` and `.../ogg/`
 - MCP server id: `nobu`
 - Tool API language: **English**
 - Do not add game-specific data to the MCP or skill — keep nobu game-agnostic
@@ -100,7 +100,7 @@ python scripts/bootstrap.py
 
 - MIDI: `assets/midi/`
 - SoundFonts: `assets/soundfonts/` (**não** commitar `.sf2`)
-- Áudio renderizado: `output/audio/`
+- Áudio renderizado: `output/audio/{project}/wav/` e `.../ogg/`
 - Server id MCP: `nobu`
 - API das tools: **inglês**
 - Não adicione dados de jogo específico no MCP ou na skill — nobu é game-agnostic

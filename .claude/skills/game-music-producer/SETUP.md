@@ -134,15 +134,13 @@ Also supported: global `~/.config/kilo/kilo.jsonc` (Windows: `%USERPROFILE%\.con
 
 ### 6. Restart & verify
 
-Fully quit and reopen the client. You should see server **nobu** with 7 tools:
+Fully quit and reopen the client. You should see server **nobu** with 14 tools:
 
-- `start_project`
-- `suggest_scale_for_mood`
-- `generate_scale`
-- `add_layer`
-- `set_tempo_change`
-- `list_layers`
-- `export_midi`
+**Compose:** `start_project`, `suggest_scale_for_mood`, `generate_scale`, `add_layer`, `set_tempo_change`, `list_layers`, `export_midi`
+
+**Render:** `render_project`, `render_chip`, `render_hybrid`, `render_sf2`, `render_all_modes`
+
+**Discovery:** `get_render_capabilities`, `list_soundfonts`
 
 ### 7. Where files go
 
@@ -156,7 +154,7 @@ python scripts/render_midi.py
 python scripts/render_midi.py --soundfont assets/soundfonts/default.sf2
 ```
 
-Output lands in `output/audio/`.
+Output lands in `output/audio/{project_name}/wav/` and `.../ogg/`.
 
 Env vars: `NOBU_MIDI_DIR`, `NOBU_OUTPUT_DIR`, `NOBU_SF2` (also accepts `FLUID_SYNTH_SF2`).
 
@@ -170,8 +168,8 @@ Env vars: `NOBU_MIDI_DIR`, `NOBU_OUTPUT_DIR`, `NOBU_SF2` (also accepts `FLUID_SY
 nobu and this skill ship **no game-specific data**. Your game (or `examples/demo_biome_ost.py`) supplies tonic + mood. Typical integration:
 
 1. Each stage/biome defines `mood` + `tonic_midi`.
-2. AudioManager loads `{stage}_calm.ogg` / `{stage}_combat.ogg` from your runtime audio path.
-3. Build step converts `assets/midi/*.mid` → `output/audio/*.ogg`.
+2. AudioManager loads `{stage}_calm.ogg` / `{stage}_combat.ogg` from your runtime audio path (copy from `output/audio/{project}/ogg/`).
+3. Build step converts `assets/midi/*.mid` → `output/audio/{project}/wav|ogg/` (MCP `render_all_modes` or `scripts/render_midi.py`).
 
 ### Troubleshooting
 
@@ -208,7 +206,7 @@ pip install -r requirements.txt
 |---|---|
 | MIDI | `assets/midi/` |
 | SoundFonts | `assets/soundfonts/` |
-| Áudio renderizado | `output/audio/` |
+| Áudio renderizado | `output/audio/{project}/wav/` e `.../ogg/` |
 
 ### Cursor
 
@@ -225,16 +223,21 @@ Rode `python scripts/bootstrap.py` ou copie `.kilo/kilo.example.jsonc`.
 
 ### Tools (inglês)
 
-`start_project`, `suggest_scale_for_mood`, `generate_scale`, `add_layer`, `set_tempo_change`, `list_layers`, `export_midi`.
+**Compose:** `start_project`, `suggest_scale_for_mood`, `generate_scale`, `add_layer`, `set_tempo_change`, `list_layers`, `export_midi`
+
+**Render:** `render_project`, `render_chip`, `render_hybrid`, `render_sf2`, `render_all_modes`
+
+**Discovery:** `get_render_capabilities`, `list_soundfonts`
 
 ### Pipeline
 
 ```bash
 python examples/demo_biome_ost.py
 python scripts/render_midi.py --mode chip
+# ou via MCP: export_midi → render_all_modes
 ```
 
-MIDI em `assets/midi/` → OGG/WAV em `output/audio/`.  
+MIDI em `assets/midi/` → OGG/WAV em `output/audio/{project}/wav/` e `.../ogg/`.
 SF2: FluidSynth → WAV → OGG (`ffmpeg` no Windows). Detalhes na seção EN acima.
 
 O nobu é **game-agnostic** — não sabe nada do seu jogo; tônica e mood vêm do caller.

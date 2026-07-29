@@ -34,9 +34,21 @@ Always follow this order:
 4. **(Optional) `set_tempo_change(...)`** — for a faster/slower section
    (e.g. boss phase 2).
 5. **`list_layers(project_name)`** — review before export.
-6. **`export_midi(project_name, destination_dir)`** — always last. Default
-   destination is `assets/midi/`. Keep `total_duration_bars_approx` for
-   engine loop setup (`production-workflow.md`).
+6. **`export_midi(project_name, destination_dir)`** — writes `.mid` to `assets/midi/`.
+7. **Render (when user wants audio):**
+   - **`get_render_capabilities()`** — optional, before promising SF2/hybrid.
+   - **`render_project(project_name, mode)`** — single mode (`chip` | `hybrid` | `sf2` | `auto`).
+   - **`render_chip` / `render_hybrid` / `render_sf2`** — explicit mode shortcuts.
+   - **`render_all_modes(project_name)`** — chip + hybrid + sf2 in one call (boss fight compare).
+
+Output: `output/audio/{project_name}/wav/` and `output/audio/{project_name}/ogg/`.
+
+Shell fallback (manual):
+
+```bash
+python scripts/render_midi.py --mode chip
+python scripts/render_track.py assets/midi/track.mid --mode hybrid
+```
 
 ## Mood → scale table
 
@@ -93,17 +105,19 @@ params) so the leitmotif stays recognizable, then crossfade in the engine.
 - [ ] At least one drum layer with off-beats?
 - [ ] Bass and melody have DIFFERENT lengths (short bass loop vs long melody)?
 - [ ] `list_layers` called before export?
+- [ ] If user asked for audio: render tool called after `export_midi`?
 - [ ] `total_duration_bars_approx` shared with the user for engine loops?
 
-## Build pipeline (`.mid` → `.ogg`)
+## Build pipeline (`.mid` → `.ogg`) — MCP preferred
+
+Use MCP render tools (step 7 above). CLI fallback:
 
 ```bash
 python scripts/render_midi.py --mode chip
 python scripts/render_midi.py --mode sf2 --soundfont assets/soundfonts/default.sf2
 ```
 
-Renders `.mid` in `assets/midi/` to `.ogg` / `.wav` in `output/audio/`.  
-SF2 path: FluidSynth → WAV → OGG (`ffmpeg` recommended on Windows). See [SETUP.md](../SETUP.md).
+Renders `.mid` in `assets/midi/` to `output/audio/{project}/wav/` and `.../ogg/`.
 
 ---
 
@@ -118,6 +132,6 @@ Moods oficiais: `safe_exploration`, `heroic_exploration`, `nostalgic_town`,
 `melancholic_dungeon`, `hostile_exotic_biome`, `magical_dreamlike`,
 `combat`, `victory`, `classic_retro` (aliases PT ainda aceitos).
 
-Pastas: MIDI → `assets/midi/`; SF2 → `assets/soundfonts/`; áudio → `output/audio/`.
+Pastas: MIDI → `assets/midi/`; SF2 → `assets/soundfonts/`; áudio → `output/audio/{project}/wav|ogg/`.
 
 Game-agnostic: o nobu não contém dados do seu jogo.

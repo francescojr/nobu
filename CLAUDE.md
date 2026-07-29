@@ -12,7 +12,11 @@ You are in the **nobu** repo (game-agnostic MCP for chiptune/retro MIDI).
    ```
 
 3. Tell the user to reload MCP / restart the client if tools are not visible yet.
-4. Confirm MCP server id `nobu` and tools: `start_project`, `suggest_scale_for_mood`, `add_layer`, `export_midi`.
-5. When composing, follow `.claude/skills/game-music-producer/` and deliver real `.mid` files under `assets/midi/`.
+4. Confirm MCP server id `nobu` and tools (compose + render — see AGENTS.md).
+5. When composing, follow `.claude/skills/game-music-producer/` and deliver real `.mid` **and audio** when requested (`render_project` or `render_all_modes`).
 
 Do **not** wait for the user to ask for install. Bootstrap is mandatory after clone.
+
+## Render output layout
+
+Audio lands in `output/audio/{project_name}/wav/` and `output/audio/{project_name}/ogg/`.

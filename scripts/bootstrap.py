@@ -107,6 +107,13 @@ def verify_imports() -> dict[str, bool]:
         cwd=str(REPO_ROOT),
     )
     results["nobu_mcp"] = r.returncode == 0 and "nobu" in (r.stdout or "")
+    r2 = subprocess.run(
+        [py, "-c", "import nobu_render; print('ok')"],
+        capture_output=True,
+        text=True,
+        cwd=str(REPO_ROOT),
+    )
+    results["nobu_render"] = r2.returncode == 0
     return results
 
 
@@ -150,7 +157,7 @@ def kilo_mcp_entry() -> dict:
         "type": "local",
         "command": [str(py.resolve()), str(server.resolve())],
         "enabled": True,
-        "timeout": 30000,
+        "timeout": 120000,
     }
 
 
@@ -164,6 +171,7 @@ def kilo_config_snippet() -> dict:
             "AGENTS.md",
             "CLAUDE.md",
             ".claude/skills/game-music-producer/SKILL.md",
+            ".claude/skills/game-music-producer/references/mcp-integration.md",
             ".kilo/rules/nobu.md",
         ],
         "mcp": {"nobu": kilo_mcp_entry()},
@@ -204,6 +212,52 @@ def _write_cursor_mcp(mcp_path: Path, entry: dict) -> None:
     )
 
 
+def _integrate_instruction_paths(target_dir: Path, instr: list) -> None:
+    """Append nobu skill/rules via absolute paths when missing in target."""
+    abs_items = [
+        str(REPO_ROOT / "AGENTS.md"),
+        str(REPO_ROOT / ".claude/skills/game-music-producer/SKILL.md"),
+        str(
+            REPO_ROOT
+            / ".claude/skills/game-music-producer/references/mcp-integration.md"
+        ),
+        str(REPO_ROOT / ".kilo/rules/nobu.md"),
+    ]
+    rel_items = [
+        "AGENTS.md",
+        ".claude/skills/game-music-producer/SKILL.md",
+        ".claude/skills/game-music-producer/references/mcp-integration.md",
+        ".kilo/rules/nobu.md",
+    ]
+    for rel, abs_path in zip(rel_items, abs_items):
+        if rel in instr or abs_path in instr:
+            continue
+        if rel == "AGENTS.md" and not (target_dir / "AGENTS.md").exists():
+            if Path(abs_path).exists():
+                instr.append(abs_path)
+            continue
+        if rel.startswith(".claude/") and (
+            target_dir / ".claude/skills/game-music-producer/SKILL.md"
+        ).exists():
+            if rel not in instr:
+                instr.append(rel)
+            continue
+        if Path(abs_path).exists():
+            instr.append(abs_path)
+
+
+def _write_integrate_cursor_rule(target_dir: Path) -> str | None:
+    rule_path = target_dir / ".cursor" / "rules" / "nobu.mdc"
+    if rule_path.exists():
+        return None
+    src = REPO_ROOT / ".cursor" / "rules" / "nobu.mdc"
+    if not src.exists():
+        return None
+    rule_path.parent.mkdir(parents=True, exist_ok=True)
+    rule_path.write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
+    return str(rule_path)
+
+
 def integrate_mcp(target_dir: Path) -> list[str]:
     """Merge nobu into target project's Cursor + Kilo configs (never global)."""
     target_dir = target_dir.resolve()
@@ -241,21 +295,7 @@ def integrate_mcp(target_dir: Path) -> list[str]:
     kilo_data.setdefault("mcp", {})
     kilo_data["mcp"]["nobu"] = kilo_mcp_entry()
     instr = kilo_data.setdefault("instructions", [])
-    for item in (
-        "AGENTS.md",
-        ".claude/skills/game-music-producer/SKILL.md",
-        ".kilo/rules/nobu.md",
-    ):
-        # Only add if paths make sense relative to target; skip AGENTS if absent
-        if item not in instr:
-            if item == "AGENTS.md" and not (target_dir / "AGENTS.md").exists():
-                continue
-            if item.startswith(".claude/") and not (
-                target_dir / ".claude/skills/game-music-producer/SKILL.md"
-            ).exists():
-                # Point at nobu repo skill via absolute note — keep relative to nobu
-                continue
-            instr.append(item)
+    _integrate_instruction_paths(target_dir, instr)
     kilo_path.write_text(
         "// Merged by nobu scripts/bootstrap.py --integrate\n"
         + json.dumps(kilo_data, indent=2, ensure_ascii=False)
@@ -263,6 +303,11 @@ def integrate_mcp(target_dir: Path) -> list[str]:
         encoding="utf-8",
     )
     written.append(str(kilo_path))
+
+    rule_written = _write_integrate_cursor_rule(target_dir)
+    if rule_written:
+        written.append(rule_written)
+
     return written
 
 
@@ -281,6 +326,18 @@ def print_human(report: dict) -> None:
         print("Optional render:")
         for name, ok in opt.items():
             print(f"  {'yes' if ok else 'no':4} {name}")
+        print()
+        print("Render modes:")
+        print("  chip    — always ready (no SF2)")
+        print("  hybrid  — needs tinysoundfont + .sf2 in assets/soundfonts/")
+        print("  sf2     — needs FluidSynth on PATH + .sf2")
+        if not opt.get("fluidsynth"):
+            print("  WARNING: FluidSynth not found — sf2 mode will fall back")
+        if not opt.get("sf2_found"):
+            print("  WARNING: no soundfont — hybrid/sf2 fall back to chip")
+            print("           See assets/soundfonts/README.md")
+        if not opt.get("ffmpeg") and platform.system() == "Windows":
+            print("  TIP: install ffmpeg for WAV→OGG on Windows")
     print()
     print("Cursor project MCP (.cursor/mcp.json):")
     print(json.dumps(report["mcp_config"], indent=2))
@@ -299,7 +356,8 @@ def print_human(report: dict) -> None:
         print("Cursor: Settings → MCP → toggle nobu ON (one-time; project .cursor/mcp.json only).")
         print("Skill:  .claude/skills/game-music-producer/")
         print("Kilo:   .kilo/kilo.jsonc + .kilo/rules/nobu.md")
-        print("Compose: ask the agent for a track, or: python examples/demo_biome_ost.py")
+        print("Compose+render: MCP tools through export_midi → render_project / render_all_modes")
+        print("Output audio: output/audio/{project}/wav/ and .../ogg/")
     else:
         print("Status: INCOMPLETE — fix failed imports and re-run bootstrap.")
         sys.exit(1)
@@ -372,7 +430,8 @@ def main() -> None:
             "Reload Window (project .cursor/mcp.json — never global ~/.cursor/mcp.json)",
             "Cursor: enable 'nobu' once under Settings → MCP if it appears disabled (Cursor default)",
             "Kilo: Settings → Agent Behaviour → MCP Servers (uses .kilo/kilo.jsonc)",
-            "Confirm server 'nobu' exposes: start_project, suggest_scale_for_mood, add_layer, export_midi",
+            "Confirm server 'nobu' exposes compose + render tools (see AGENTS.md)",
+            "After compose: render_project or render_all_modes for audio delivery",
             "Read .claude/skills/game-music-producer/SKILL.md when composing",
             "Optional demo: python examples/demo_biome_ost.py && python scripts/render_midi.py",
         ],

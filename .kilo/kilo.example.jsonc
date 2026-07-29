@@ -6,6 +6,7 @@
     "AGENTS.md",
     "CLAUDE.md",
     ".claude/skills/game-music-producer/SKILL.md",
+    ".claude/skills/game-music-producer/references/mcp-integration.md",
     ".kilo/rules/nobu.md"
   ],
   "mcp": {
@@ -15,7 +16,7 @@
       // Replace these placeholders or let scripts/bootstrap.py rewrite kilo.jsonc.
       "command": ["python", "nobu_mcp.py"],
       "enabled": true,
-      "timeout": 30000
+      "timeout": 120000
     }
   }
 }

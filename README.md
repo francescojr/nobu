@@ -8,7 +8,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![Version](https://img.shields.io/badge/version-0.1.6-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.2.0-blue.svg)](CHANGELOG.md)
 [![Changelog](https://img.shields.io/badge/changelog-Keep%20a%20Changelog-orange.svg)](CHANGELOG.md)
 
 Plug nobu into **Cursor**, **Claude Desktop**, or **Kilo Code**. Ask an agent to compose a stage theme — get a real multi-track `.mid`, then render to `.ogg` / `.wav` for your engine.
@@ -16,10 +16,10 @@ Plug nobu into **Cursor**, **Claude Desktop**, or **Kilo Code**. Ask an agent to
 nobu ships **no game-specific data**. Your project supplies tonic, mood, and biome params.
 
 ```
-  agent / examples ──► nobu MCP ──► assets/midi/*.mid
+  agent / examples ──► nobu MCP ──► assets/midi/{project}.mid
                                       │
   assets/soundfonts/*.sf2 ──┐         ▼
-                            └─► scripts/render_* ──► output/audio/*.ogg
+                            └─► render MCP / scripts ──► output/audio/{project}/wav|ogg/
 ```
 
 ---
@@ -41,8 +41,8 @@ Clone https://github.com/francescojr/nobu.git (sibling folder or into this works
 Read AGENTS.md (and CLAUDE.md if present) and run: python scripts/bootstrap.py
 If this is a game project, also run: python scripts/bootstrap.py --integrate <this_project_root>
 Reload MCP. In Cursor, enable server "nobu" if it is disabled (Settings → MCP).
-Confirm tools: start_project / add_layer / export_midi.
-Then follow .claude/skills/game-music-producer/ and compose when I ask.
+Confirm tools: compose (start_project … export_midi) + render (render_project / render_all_modes).
+Then follow .claude/skills/game-music-producer/ — deliver MIDI and audio when I ask.
 ```
 
 Integrating into an existing game:
@@ -73,7 +73,7 @@ Then reload MCP. In **Cursor**: Settings → MCP → enable **nobu** once if dis
 ```bash
 python examples/demo_biome_ost.py
 python scripts/render_midi.py --mode chip   # always works, no SF2 needed
-# → assets/midi/*.mid  and  output/audio/*.ogg (or .wav)
+# → assets/midi/*.mid  and  output/audio/{project}/wav|ogg/
 ```
 
 ### Render modes (chip / hybrid / full SF2)
@@ -105,7 +105,8 @@ python scripts/render_track.py assets/midi/biome1_calm.mid --mode hybrid
 | `.kilo/` | Kilo Code v7+ config (`kilo.example.jsonc`, `rules/nobu.md`) |
 | `assets/midi/` | Generated / authored `.mid` files |
 | `assets/soundfonts/` | Your `.sf2` files (not vendored — see README there) |
-| `output/audio/` | Rendered `.ogg` / `.wav` |
+| `output/audio/` | Rendered audio root — `{project}/wav/` and `{project}/ogg/` per track |
+| `nobu_render.py` | Shared render library (CLI + MCP) |
 | `scripts/render_midi.py` | Batch MIDI → audio (`chip` / `hybrid` / `sf2` / `auto`) |
 | `scripts/render_track.py` | Single-file render (same modes; SF2 → WAV → OGG) |
 | `examples/demo_biome_ost.py` | Generic 4-biome × calm/combat demo |
@@ -122,10 +123,19 @@ python scripts/render_track.py assets/midi/biome1_calm.mid --mode hybrid
 | `start_project` | Create an empty multi-layer project |
 | `suggest_scale_for_mood` | Map scene mood → scale + pitch palette |
 | `generate_scale` | Build a scale from tonic + type |
-| `add_layer` | Add melody / harmony / bass / drums |
+| `add_layer` | Add melody / harmony / bass / drums (string drum names OK) |
 | `set_tempo_change` | Schedule BPM changes (horizontal resequencing) |
 | `list_layers` | Inspect layers before export |
 | `export_midi` | Write `assets/midi/{project}.mid` + loop metadata |
+| `render_project` | Render one mode: chip / hybrid / sf2 / auto |
+| `render_chip` | Pure chiptune render shortcut |
+| `render_hybrid` | SF2 drums + chip melodic shortcut |
+| `render_sf2` | Full SoundFont render shortcut |
+| `render_all_modes` | chip + hybrid + sf2 in one call |
+| `get_render_capabilities` | FluidSynth / SF2 / ffmpeg health check |
+| `list_soundfonts` | Discover `.sf2` files |
+
+Audio output: `output/audio/{project}/wav/` and `.../ogg/`.
 
 Mood keys: `safe_exploration`, `heroic_exploration`, `nostalgic_town`, `melancholic_dungeon`, `hostile_exotic_biome`, `magical_dreamlike`, `combat`, `victory`, `classic_retro`.
 
@@ -150,7 +160,7 @@ Copy or open this repo so Cursor / Claude can load:
 
 `.claude/skills/game-music-producer/`
 
-When the **nobu** MCP is connected, the skill instructs the agent to call the tools and deliver real MIDI — not text-only sketches.
+When the **nobu** MCP is connected, the skill instructs the agent to call the tools and deliver real MIDI **and audio** — not text-only sketches.
 
 ---
 
@@ -183,8 +193,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.
 Clone https://github.com/francescojr/nobu.git.
 Leia nobu/AGENTS.md e rode: python scripts/bootstrap.py
 Se for um projeto de jogo, rode também: python scripts/bootstrap.py --integrate <raiz_deste_projeto>
-Recarregue o MCP, confirme o server "nobu" com start_project / add_layer / export_midi.
-Siga .claude/skills/game-music-producer/ e compose quando eu pedir.
+Recarregue o MCP, confirme o server "nobu" (14 tools: compose + render).
+Siga .claude/skills/game-music-producer/ — compose e render quando eu pedir.
 ```
 
 ## Início rápido (manual)
@@ -209,11 +219,12 @@ Detalhes: [AGENTS.md](AGENTS.md) · [SETUP.md](.claude/skills/game-music-produce
 |---|---|
 | `assets/midi/` | Arquivos `.mid` |
 | `assets/soundfonts/` | Seus `.sf2` (não distribuídos no repo) |
-| `output/audio/` | `.ogg` / `.wav` renderizados |
+| `output/audio/` | `{project}/wav/` e `{project}/ogg/` renderizados |
 
 ## Tools MCP (inglês)
 
-`start_project` → `suggest_scale_for_mood` → `add_layer` → `list_layers` → `export_midi`
+Compose: `start_project` → `suggest_scale_for_mood` → `add_layer` → `list_layers` → `export_midi`  
+Render: `render_project` / `render_chip` / `render_hybrid` / `render_sf2` / `render_all_modes`
 
 ## Licença
 
