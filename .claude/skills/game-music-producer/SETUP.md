@@ -145,9 +145,11 @@ Also supported: global `~/.config/kilo/kilo.jsonc` (Windows: `%USERPROFILE%\.con
 
 ### 6. Restart & verify
 
-Fully quit and reopen the client. You should see server **nobu** with 14 tools:
+Fully quit and reopen the client. You should see server **nobu** with 16 tools:
 
 **Compose:** `start_project`, `suggest_scale_for_mood`, `generate_scale`, `add_layer`, `set_tempo_change`, `list_layers`, `export_midi`
+
+**Mega Drive:** `get_megadrive_capabilities`, `export_megadrive`
 
 **Render:** `render_project`, `render_chip`, `render_hybrid`, `render_sf2`, `render_all_modes`
 
@@ -235,6 +237,8 @@ Rode `python scripts/bootstrap.py` ou copie `.kilo/kilo.example.jsonc`.
 ### Tools (inglês)
 
 **Compose:** `start_project`, `suggest_scale_for_mood`, `generate_scale`, `add_layer`, `set_tempo_change`, `list_layers`, `export_midi`
+
+**Mega Drive:** `get_megadrive_capabilities`, `export_megadrive`
 
 **Render:** `render_project`, `render_chip`, `render_hybrid`, `render_sf2`, `render_all_modes`
 

@@ -8,6 +8,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 This project **does not use an `[Unreleased]` section**. Every session with
 meaningful changes cuts a new `MAJOR.MINOR.PATCH` entry (via Cursor hooks).
 
+## [0.3.0] — 2026-08-08
+
+### Added
+
+- Mega Drive VGM export library `nobu_megadrive.py` (YM2612 FM + PSG drums)
+- MCP tools `get_megadrive_capabilities` and `export_megadrive` (16 tools total)
+- CLI `scripts/export_megadrive.py` and smoke `scripts/smoke_megadrive.py`
+- Builtin FM patches (`lead` / `bass` / `harmony`) + optional BYO JSON overlays
+- Optional BYO PCM drums under `assets/megadrive/pcm/` (SF2-style; not shipped)
+- Output path `output/audio/{project}/vgm/{project}.vgm` for SGDK `.res` handoff
+- `assets/megadrive/README.md` documenting BYO policy and SGDK XGM usage
+- Regression `scripts/test_megadrive_patches.py`
+
+### Changed
+
+- `export_midi` `next_step` mentions Mega Drive / `export_megadrive`
+- Agent docs / skill / rules updated for VGM workflow and 16 tools
+- `.gitignore` ignores local `assets/megadrive` BYO wav/json (keeps README/gitkeep)
+
 ## [0.2.4] — 2026-07-29
 
 ### Added

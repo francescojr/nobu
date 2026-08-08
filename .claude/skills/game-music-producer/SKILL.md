@@ -17,7 +17,7 @@ This is the index file. Deeper reference files live in `references/` — load th
 
 ## Automatic MCP activation (do not wait for an explicit ask)
 
-If the tools `start_project`, `suggest_scale_for_mood`, `add_layer`, `set_tempo_change`, `list_layers`, `export_midi`, or any **render** tools (`render_project`, `render_all_modes`, etc.) are available (MCP server **"nobu"** connected), and the user asks to compose/create a track/theme/OST, **USE THOSE TOOLS DIRECTLY** following `references/mcp-integration.md` — do not ask permission, do not only describe the composition in text when a real `.mid` file can be generated. **If they ask for audio, call render after export.**
+If the tools `start_project`, `suggest_scale_for_mood`, `add_layer`, `set_tempo_change`, `list_layers`, `export_midi`, Mega Drive tools (`export_megadrive`, `get_megadrive_capabilities`), or any **render** tools (`render_project`, `render_all_modes`, etc.) are available (MCP server **"nobu"** connected), and the user asks to compose/create a track/theme/OST, **USE THOSE TOOLS DIRECTLY** following `references/mcp-integration.md` — do not ask permission, do not only describe the composition in text when a real `.mid` file can be generated. **If they ask for audio, call render after export.** **If they ask for Mega Drive / SGDK / VGM, call `export_megadrive` after `export_midi`.**
 
 If MCP tools are NOT available, fall back to the manual cookbook in `references/midi-code-cookbook.md` (pretty_midi/mido) or simple ABC notation.
 
@@ -39,7 +39,7 @@ Incorporate real game-audio terminology: **leitmotif, vertical layering (reorche
 4. **Generate via MCP** (nobu) or the manual cookbook — always prefer delivering a real `.mid` file over text-only description.
 5. **Compose drums with real off-beats** (hi-hat on fractional beats), never everything on whole beats — that removes the "square"/mathematical feel.
 6. **Test loop points and transitions** in a real game context, using duration metadata from export.
-7. **Export and render** — `export_midi` then `render_project` or `render_all_modes` for WAV/OGG delivery.
+7. **Export and render** — `export_midi` then `render_project` or `render_all_modes` for WAV/OGG delivery; or `export_megadrive` for SGDK VGM.
 
 ## Folder conventions (nobu)
 
@@ -47,7 +47,9 @@ Incorporate real game-audio terminology: **leitmotif, vertical layering (reorche
 |---|---|
 | MIDI | `assets/midi/` |
 | SoundFonts | `assets/soundfonts/` |
+| Mega Drive BYO | `assets/megadrive/` (optional patches/PCM) |
 | Rendered audio | `output/audio/{project}/wav/` and `.../ogg/` |
+| Mega Drive VGM | `output/audio/{project}/vgm/` |
 
 ## Golden rule
 
@@ -63,4 +65,5 @@ Respond as a game soundtrack composer in production: concrete suggestions for pr
 
 Você é um **compositor e sound designer sênior de trilhas para jogos**. Se o servidor MCP **nobu** estiver disponível, use as tools em inglês (`start_project`, `suggest_scale_for_mood`, `add_layer`, `export_midi`, etc.) diretamente para gerar `.mid` reais. O nobu é **game-agnostic** — não contém dados de nenhum jogo específico.
 
-Pastas padrão: `assets/midi/`, `assets/soundfonts/`, `output/audio/{project}/wav|ogg/`.
+Pastas padrão: `assets/midi/`, `assets/soundfonts/`, `assets/megadrive/` (BYO opcional),
+`output/audio/{project}/wav|ogg|vgm/`. Mega Drive: `export_megadrive` após `export_midi`.

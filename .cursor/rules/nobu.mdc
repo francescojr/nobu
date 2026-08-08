@@ -21,15 +21,17 @@ Read [AGENTS.md](AGENTS.md) and [CLAUDE.md](CLAUDE.md). Prefer `python scripts/b
 
 - MIDI → `assets/midi/`
 - SoundFonts → `assets/soundfonts/`
+- Mega Drive BYO → `assets/megadrive/` (optional patches/PCM; not shipped)
 - Rendered audio → `output/audio/{project_name}/wav/` and `.../ogg/`
+- Mega Drive VGM → `output/audio/{project_name}/vgm/`
 - MCP server id → `nobu` (`nobu_mcp.py`)
 - Skill → `.claude/skills/game-music-producer/`
 
 ## When composing music
 
-Use nobu MCP tools: `start_project` → `suggest_scale_for_mood` → `add_layer` → `list_layers` → `export_midi` → **render** (`render_project`, `render_chip`, `render_hybrid`, `render_sf2`, or `render_all_modes`).
+Use nobu MCP tools: `start_project` → `suggest_scale_for_mood` → `add_layer` → `list_layers` → `export_midi` → **render** (`render_project`, `render_chip`, `render_hybrid`, `render_sf2`, or `render_all_modes`) and/or **`export_megadrive`** for SGDK VGM.
 
-If the user asks for audio or multiple versions (chip/hybrid/sf2), **never stop at MIDI**. Call `get_render_capabilities` before promising SF2.
+If the user asks for audio or multiple versions (chip/hybrid/sf2), **never stop at MIDI**. Call `get_render_capabilities` before promising SF2. If they ask for Mega Drive / SGDK / VGM, call `get_megadrive_capabilities` then `export_megadrive`.
 
 Follow `references/mcp-integration.md`.
 

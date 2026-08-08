@@ -8,7 +8,9 @@ Baseado em práticas de produção de game audio e documentação de integraçã
 |---|---|
 | MIDI (MCP / examples) | `assets/midi/` |
 | SoundFonts (`.sf2`) | `assets/soundfonts/` |
+| Mega Drive BYO | `assets/megadrive/` (optional patches/PCM) |
 | Rendered `.ogg` / `.wav` | `output/audio/{project}/wav/` and `.../ogg/` |
+| Mega Drive `.vgm` | `output/audio/{project}/vgm/` |
 
 ```bash
 # Compose (demo or via nobu MCP export_midi)
@@ -17,10 +19,14 @@ python examples/demo_biome_ost.py
 # Render all MIDI → OGG/WAV (or use MCP render_project / render_all_modes)
 python scripts/render_midi.py --mode chip
 python scripts/render_midi.py --soundfont assets/soundfonts/default.sf2
+
+# Mega Drive / SGDK VGM (or MCP export_megadrive)
+python scripts/export_megadrive.py assets/midi/my_track.mid --json
 ```
 
 Copy finished audio from `output/audio/{project}/` into your game's runtime path
 (e.g. `res://audio/music/` in Godot, `Assets/Audio/Music/` in Unity).
+For SGDK, reference the `.vgm` from your `.res` (`XGM name "music/track.vgm"`).
 
 ## 1. Pipeline padrão de produção de trilha para jogo
 1. **Briefing de design**: receber GDD/level design doc, entender pilares emocionais de cada estado de jogo.

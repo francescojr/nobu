@@ -23,6 +23,8 @@ EXPECTED_TOOLS = [
     "set_tempo_change",
     "list_layers",
     "export_midi",
+    "get_megadrive_capabilities",
+    "export_megadrive",
     "get_render_capabilities",
     "list_soundfonts",
     "render_project",
@@ -96,6 +98,10 @@ if meta.get("next_step") and "render" in meta["next_step"]:
     ok("export_midi next_step hint")
 else:
     fail("export_midi missing next_step")
+if meta.get("next_step") and "export_megadrive" in meta["next_step"]:
+    ok("export_midi next_step mentions export_megadrive")
+else:
+    fail("export_midi next_step missing export_megadrive")
 
 # 5. Render pipeline
 print("\n5. Render pipeline")
@@ -140,10 +146,30 @@ else:
 print("\n7. Version sync")
 pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
 changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
-if 'version = "0.2.4"' in pyproject and "## [0.2.4]" in changelog:
-    ok("pyproject + CHANGELOG 0.2.4")
+if 'version = "0.3.0"' in pyproject and "## [0.3.0]" in changelog:
+    ok("pyproject + CHANGELOG 0.3.0")
 else:
     fail("version mismatch pyproject/CHANGELOG")
+
+# 7b. Mega Drive VGM
+print("\n7b. Mega Drive VGM")
+import nobu_megadrive
+
+md_caps = nobu_megadrive.get_megadrive_capabilities_impl()
+if md_caps.get("vgm_export") and "lead" in md_caps.get("builtin_patches", []):
+    ok("megadrive capabilities")
+else:
+    fail(f"megadrive capabilities: {md_caps}")
+md_result = json.loads(nobu_mcp.export_megadrive("_audit"))
+vgm_path = md_result.get("file", "")
+if vgm_path and os.path.isfile(vgm_path):
+    magic = Path(vgm_path).read_bytes()[:4]
+    if magic == b"Vgm " and os.path.getsize(vgm_path) > 0x40:
+        ok(f"export_megadrive -> {Path(vgm_path).name}")
+    else:
+        fail(f"bad vgm magic/size: {magic} {os.path.getsize(vgm_path)}")
+else:
+    fail(f"export_megadrive missing file: {md_result}")
 
 # 8. Bootstrap JSON report
 print("\n8. Bootstrap JSON")

@@ -17,7 +17,9 @@ Bootstrap writes `.kilo/kilo.jsonc` with `"timeout": 300000` (5 min). Reload Kil
 
 - MIDI → `assets/midi/`
 - SoundFonts → `assets/soundfonts/`
+- Mega Drive BYO → `assets/megadrive/` (optional)
 - Rendered audio → `output/audio/{project_name}/wav/` and `.../ogg/`
+- Mega Drive VGM → `output/audio/{project_name}/vgm/`
 
 ## Compose + deliver (MCP)
 
@@ -26,9 +28,11 @@ start_project → suggest_scale_for_mood → add_layer → list_layers → expor
 → get_render_capabilities   (before hybrid/sf2)
 → render_chip   (first audio — preferred)
 → render_hybrid | render_sf2 | render_all_modes   (only when user asks)
+→ get_megadrive_capabilities → export_megadrive   (Mega Drive / SGDK / VGM)
 ```
 
 If the user asks for audio, **never stop at MIDI** — call **`render_chip`** after export.
+If they ask for Mega Drive / SGDK, call **`export_megadrive`** (VGM; PSG drums without BYO PCM).
 
 After render, report **`mode_effective`**, **`fallback_reason`**, **`quality_warnings`** — never claim SF2 if `mode_effective != sf2`.
 

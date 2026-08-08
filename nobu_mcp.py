@@ -508,7 +508,8 @@ def export_midi(
 
     After export, call render_project, render_chip, render_hybrid,
     render_sf2, or render_all_modes to produce audio under
-    output/audio/{project_name}/wav/ and .../ogg/.
+    output/audio/{project_name}/wav/ and .../ogg/. For Mega Drive / SGDK,
+    call get_megadrive_capabilities then export_megadrive for a .vgm.
 
     Default destination_dir is assets/midi/ (or NOBU_MIDI_DIR).
     """
@@ -531,6 +532,7 @@ def export_midi(
     max_end_time = 0.0
     for i, track in enumerate(tracks):
         channel = track["channel"]
+        midi_file.addTrackName(i, 0, track["name"])
         if track["type"] != "drums":
             midi_file.addProgramChange(i, channel, 0, track["program"])
         for n in track["notes"]:
@@ -563,10 +565,54 @@ def export_midi(
             f"Call get_render_capabilities() before hybrid/sf2. "
             f"Then render_chip('{project_name}') for fast audio, or "
             f"render_all_modes('{project_name}') only if the user wants all three "
-            f"compared — read mode_effective and quality_warnings in each result."
+            f"compared — read mode_effective and quality_warnings in each result. "
+            f"For Mega Drive / SGDK: get_megadrive_capabilities() then "
+            f"export_megadrive('{project_name}') → output/audio/.../vgm/."
         ),
     }
     return json.dumps(metadata, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def get_megadrive_capabilities() -> dict:
+    """
+    Report Mega Drive VGM export readiness: builtin FM patches, BYO JSON
+    patch overrides, optional PCM drum WAVs under assets/megadrive/, and
+    install hints. Call before promising PCM drums or custom patches.
+    Export always works with builtin patches + PSG noise drums.
+    """
+    import nobu_megadrive
+
+    return nobu_megadrive.get_megadrive_capabilities_impl()
+
+
+@mcp.tool(timeout=120)
+def export_megadrive(
+    project_name: str, destination_dir: str | None = None
+) -> str:
+    """
+    Export project MIDI to a Sega Mega Drive / Genesis .vgm file for SGDK.
+
+    Resolves assets/midi/{project_name}.mid (exports from memory if needed),
+    maps layers to YM2612 FM + PSG/PCM drums, and writes
+    output/audio/{project_name}/vgm/{project_name}.vgm.
+
+    Optional BYO assets (not shipped): assets/megadrive/patches/*.json and
+    assets/megadrive/pcm/{kick,snare,...}.wav — same policy as SoundFonts.
+    Without PCM, drums use PSG noise. SGDK consumes the .vgm via .res XGM
+    (rescomp/xgmtool in the game project — not run by nobu).
+
+    destination_dir overrides the output/audio root (NOBU_OUTPUT_DIR).
+    """
+    import nobu_megadrive
+
+    midi_path = _ensure_midi_path(project_name)
+    result = nobu_megadrive.export_midi_to_vgm(
+        midi_path,
+        project_name=project_name,
+        destination_dir=destination_dir,
+    )
+    return json.dumps(result, ensure_ascii=False, indent=2)
 
 
 @mcp.tool()

@@ -67,6 +67,8 @@ Trigger this checklist when: the user says install/setup/use nobu, the repo was 
 
    **Compose:** `start_project`, `suggest_scale_for_mood`, `generate_scale`, `add_layer`, `set_tempo_change`, `list_layers`, `export_midi`
 
+   **Mega Drive:** `get_megadrive_capabilities`, `export_megadrive`
+
    **Render:** `render_project`, `render_chip`, `render_hybrid`, `render_sf2`, `render_all_modes`
 
    **Discovery:** `get_render_capabilities`, `list_soundfonts`
@@ -88,6 +90,8 @@ Trigger this checklist when: the user says install/setup/use nobu, the repo was 
 | MIDI | `assets/midi/` |
 | SoundFonts | `assets/soundfonts/` (`default.sf2` optional) |
 | Rendered audio | `output/audio/{project}/wav/` and `.../ogg/` |
+| Mega Drive VGM | `output/audio/{project}/vgm/` |
+| MD BYO patches/PCM | `assets/megadrive/` (optional; not shipped) |
 | MCP entrypoint | `nobu_mcp.py` |
 | Bootstrap | `scripts/bootstrap.py` |
 
@@ -118,7 +122,7 @@ Never treat missing SF2 as a fatal error — fall back and tell the user.
 
 Follow `.claude/skills/game-music-producer/references/mcp-integration.md`:
 
-1. `start_project` → 2. `suggest_scale_for_mood` → 3. `add_layer` (×N) → 4. `list_layers` → 5. `export_midi` → 6. **render** (`render_project` or `render_all_modes` when user wants audio)
+1. `start_project` → 2. `suggest_scale_for_mood` → 3. `add_layer` (×N) → 4. `list_layers` → 5. `export_midi` → 6. **render** (`render_project` or `render_all_modes` when user wants audio) **or** Mega Drive `get_megadrive_capabilities` → `export_megadrive` when targeting SGDK / VGM
 
 Prefer delivering real `.mid` under `assets/midi/` **and audio** under `output/audio/{project}/` when requested — never stop at MIDI alone.
 
@@ -145,7 +149,7 @@ Do not reintroduce an Unreleased section. Edit version bullets by hand if the au
 
 ## Do not
 
-- Vendor `.sf2` files into git.
+- Vendor `.sf2` files or third-party Mega Drive sample kits into git.
 - Rename the MCP server away from `nobu`.
 - Reintroduce game-specific content into the MCP or skill.
 - Skip bootstrap and hand-edit paths unless bootstrap failed.
@@ -153,5 +157,5 @@ Do not reintroduce an Unreleased section. Edit version bullets by hand if the au
 ## Success criteria
 
 - `python scripts/bootstrap.py --json` reports `"ok": true`
-- MCP client shows server `nobu` with compose + render tools (14 total)
-- `export_midi` writes under `assets/midi/`; render tools write under `output/audio/{project}/`
+- MCP client shows server `nobu` with compose + Mega Drive + render tools (16 total)
+- `export_midi` writes under `assets/midi/`; render tools write under `output/audio/{project}/`; `export_megadrive` writes `.../vgm/`

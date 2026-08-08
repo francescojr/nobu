@@ -8,7 +8,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![Version](https://img.shields.io/badge/version-0.2.4-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.3.0-blue.svg)](CHANGELOG.md)
 [![Changelog](https://img.shields.io/badge/changelog-Keep%20a%20Changelog-orange.svg)](CHANGELOG.md)
 
 Plug nobu into **Cursor**, **Claude Desktop**, or **Kilo Code**. Ask an agent to compose a stage theme — get a real multi-track `.mid`, then render to `.ogg` / `.wav` for your engine.
@@ -41,8 +41,8 @@ Clone https://github.com/francescojr/nobu.git (sibling folder or into this works
 Read AGENTS.md (and CLAUDE.md if present) and run: python scripts/bootstrap.py --no-prompt
 If this is a game project, also run: python scripts/bootstrap.py --integrate <this_project_root> --no-prompt
 Reload MCP. In Cursor, enable server "nobu" if it is disabled (Settings → MCP).
-Confirm tools: compose (start_project … export_midi) + render (render_project / render_all_modes).
-Then follow .claude/skills/game-music-producer/ — deliver MIDI and audio when I ask.
+Confirm tools: compose (start_project … export_midi) + Mega Drive (export_megadrive) + render (render_project / render_all_modes).
+Then follow .claude/skills/game-music-producer/ — deliver MIDI, audio, and/or VGM when I ask.
 ```
 
 Integrating into an existing game:
@@ -171,6 +171,8 @@ python scripts/render_track.py assets/midi/biome1_calm.mid --mode hybrid
 | `set_tempo_change` | Schedule BPM changes (horizontal resequencing) |
 | `list_layers` | Inspect layers before export |
 | `export_midi` | Write `assets/midi/{project}.mid` + loop metadata |
+| `get_megadrive_capabilities` | Builtin FM patches / optional BYO PCM readiness |
+| `export_megadrive` | MIDI → Mega Drive `.vgm` for SGDK |
 | `render_project` | Render one mode: chip / hybrid / sf2 / auto |
 | `render_chip` | Pure chiptune render shortcut |
 | `render_hybrid` | SF2 drums + chip melodic shortcut |
@@ -179,7 +181,7 @@ python scripts/render_track.py assets/midi/biome1_calm.mid --mode hybrid
 | `get_render_capabilities` | FluidSynth / SF2 / ffmpeg health check |
 | `list_soundfonts` | Discover `.sf2` files |
 
-Audio output: `output/audio/{project}/wav/` and `.../ogg/`.
+Audio output: `output/audio/{project}/wav/` and `.../ogg/`. Mega Drive: `.../vgm/`.
 
 Mood keys: `safe_exploration`, `heroic_exploration`, `nostalgic_town`, `melancholic_dungeon`, `hostile_exotic_biome`, `magical_dreamlike`, `combat`, `victory`, `classic_retro`.
 
@@ -196,6 +198,21 @@ assets/soundfonts/default.sf2
 Or set `NOBU_SF2=/path/to/yours.sf2`. Re-check: `python scripts/bootstrap.py --doctor` or MCP `get_render_capabilities`.
 
 Without a soundfont, chip render **always works** via the built-in NES-style synth. Hybrid/sf2 modes fall back to chip until you add a soundfont.
+
+---
+
+## Mega Drive / VGM (SGDK)
+
+Export a console-ready VGM after compose:
+
+```bash
+python scripts/export_megadrive.py assets/midi/my_track.mid --json
+# → output/audio/my_track/vgm/my_track.vgm
+```
+
+MCP: `get_megadrive_capabilities` → `export_megadrive("my_track")`.
+
+Builtin FM patches + **PSG noise drums** always work. Optional BYO patches/PCM live under `assets/megadrive/` (not shipped — same policy as SoundFonts). See [assets/megadrive/README.md](assets/megadrive/README.md). Point your SGDK `.res` at the VGM (`XGM name "file.vgm"`); rescomp runs xgmtool in the game project.
 
 ---
 
@@ -238,8 +255,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.
 Clone https://github.com/francescojr/nobu.git.
 Leia nobu/AGENTS.md e rode: python scripts/bootstrap.py --no-prompt
 Se for um projeto de jogo, rode também: python scripts/bootstrap.py --integrate <raiz_deste_projeto> --no-prompt
-Recarregue o MCP, confirme o server "nobu" (14 tools: compose + render).
-Siga .claude/skills/game-music-producer/ — compose e render quando eu pedir.
+Recarregue o MCP, confirme o server "nobu" (16 tools: compose + Mega Drive + render).
+Siga .claude/skills/game-music-producer/ — compose, render e/ou VGM quando eu pedir.
 ```
 
 ## Início rápido (manual)
@@ -265,11 +282,13 @@ Detalhes: [AGENTS.md](AGENTS.md) · [SETUP.md](.claude/skills/game-music-produce
 |---|---|
 | `assets/midi/` | Arquivos `.mid` |
 | `assets/soundfonts/` | Seus `.sf2` (não distribuídos no repo) |
-| `output/audio/` | `{project}/wav/` e `{project}/ogg/` renderizados |
+| `assets/megadrive/` | BYO patches/PCM opcionais (não distribuídos) |
+| `output/audio/` | `{project}/wav/`, `ogg/`, e `vgm/` |
 
 ## Tools MCP (inglês)
 
 Compose: `start_project` → `suggest_scale_for_mood` → `add_layer` → `list_layers` → `export_midi`  
+Mega Drive: `get_megadrive_capabilities` → `export_megadrive`  
 Render: `render_project` / `render_chip` / `render_hybrid` / `render_sf2` / `render_all_modes`
 
 ## Licença

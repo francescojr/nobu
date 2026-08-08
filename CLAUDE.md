@@ -13,10 +13,11 @@ You are in the **nobu** repo (game-agnostic MCP for chiptune/retro MIDI).
 
 3. Tell the user to reload MCP / restart the client if tools are not visible yet.
 4. Confirm MCP server id `nobu` and tools (compose + render — see AGENTS.md).
-5. When composing, follow `.claude/skills/game-music-producer/` and deliver real `.mid` **and audio** when requested (`render_project` or `render_all_modes`).
+5. When composing, follow `.claude/skills/game-music-producer/` and deliver real `.mid` **and audio** when requested (`render_project` or `render_all_modes`). For Mega Drive / SGDK, call `export_megadrive` after `export_midi`.
 
 Do **not** wait for the user to ask for install. Bootstrap is mandatory after clone.
 
 ## Render output layout
 
 Audio lands in `output/audio/{project_name}/wav/` and `output/audio/{project_name}/ogg/`.
+Mega Drive VGM lands in `output/audio/{project_name}/vgm/`.

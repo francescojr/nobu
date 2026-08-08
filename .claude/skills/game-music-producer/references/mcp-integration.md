@@ -41,12 +41,15 @@ Always follow this order:
    - **`render_project(project_name, mode)`** — single mode (`chip` | `hybrid` | `sf2` | `auto`).
    - **`render_hybrid` / `render_sf2`** — explicit mode shortcuts.
    - **`render_all_modes(project_name)`** — only when user asks to compare all three (slow, up to ~3 min). Emits **global** MCP progress: `mode_chip_start` → `mode_chip:…` → `mode_chip_done` → hybrid → sf2 (0→1, no reset to 10% per mode). Still one blocking call — keep Kilo timeout at 5 min.
+8. **Mega Drive / SGDK (when user wants VGM / console music):**
+   - **`get_megadrive_capabilities()`** — builtin FM patches, optional BYO PCM/patches under `assets/megadrive/`.
+   - **`export_megadrive(project_name)`** — writes `output/audio/{project}/vgm/{project}.vgm`. Always works with PSG drums; local PCM WAVs are optional (same BYO policy as SF2). Point SGDK `.res` at the VGM (`XGM name "file.vgm"`); do not run xgmtool from nobu.
 
 After every render, read **`mode_effective`**, **`fallback_reason`**, and **`quality_warnings`** in the JSON. Do not report “SF2 delivered” if `mode_effective` is not `sf2` or if `quality_warnings` is non-empty.
 
-Use default output layout only (`output/audio/{project}/wav|ogg/`). Do **not** use custom `destination_dir` unless the user explicitly asks.
+Use default output layout only (`output/audio/{project}/wav|ogg/` and `.../vgm/` for Mega Drive). Do **not** use custom `destination_dir` unless the user explicitly asks.
 
-Output: `output/audio/{project_name}/wav/` and `output/audio/{project_name}/ogg/`.
+Output: `output/audio/{project_name}/wav/`, `.../ogg/`, and (Mega Drive) `.../vgm/`.
 
 **Expected WAV sizes (~38s track):** chip ~3.5 MB, full SF2 ~7 MB. Similar sizes for chip and “sf2” mean fallback — check JSON.
 
@@ -126,6 +129,7 @@ params) so the leitmotif stays recognizable, then crossfade in the engine.
 - [ ] Bass and melody have DIFFERENT lengths (short bass loop vs long melody)?
 - [ ] `list_layers` called before export?
 - [ ] If user asked for audio: render tool called after `export_midi`?
+- [ ] If user asked for Mega Drive / SGDK / VGM: `export_megadrive` called after `export_midi`?
 - [ ] `total_duration_bars_approx` shared with the user for engine loops?
 
 ## Build pipeline (`.mid` → `.ogg`) — MCP preferred
@@ -146,12 +150,13 @@ Renders `.mid` in `assets/midi/` to `output/audio/{project}/wav/` and `.../ogg/`
 Servidor MCP: **nobu** (`nobu_mcp.py`). Tools em inglês:
 
 `start_project` → `suggest_scale_for_mood` → `add_layer` (×N) →
-`list_layers` → `export_midi`.
+`list_layers` → `export_midi` → (áudio) render **ou** (Mega Drive) `export_megadrive`.
 
 Moods oficiais: `safe_exploration`, `heroic_exploration`, `nostalgic_town`,
 `melancholic_dungeon`, `hostile_exotic_biome`, `magical_dreamlike`,
 `combat`, `victory`, `classic_retro` (aliases PT ainda aceitos).
 
-Pastas: MIDI → `assets/midi/`; SF2 → `assets/soundfonts/`; áudio → `output/audio/{project}/wav|ogg/`.
+Pastas: MIDI → `assets/midi/`; SF2 → `assets/soundfonts/`; MD BYO → `assets/megadrive/`;
+áudio → `output/audio/{project}/wav|ogg/`; VGM → `output/audio/{project}/vgm/`.
 
 Game-agnostic: o nobu não contém dados do seu jogo.

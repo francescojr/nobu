@@ -22,14 +22,19 @@ Thumbs.db
 .mcp.json
 .kilo/kilo.jsonc
 
-# Generated audio / local soundfonts (keep directory placeholders)
+# Generated audio / local soundfonts / Mega Drive BYO (keep directory placeholders)
 assets/midi/*.mid
 assets/soundfonts/*.sf2
 assets/soundfonts/*.SF2
+assets/megadrive/pcm/*.wav
+assets/megadrive/patches/*.json
 output/audio/*
 !output/audio/.gitkeep
 !assets/midi/.gitkeep
 !assets/soundfonts/README.md
+!assets/megadrive/README.md
+!assets/megadrive/patches/.gitkeep
+!assets/megadrive/pcm/.gitkeep
 
 # Local audit clones (never commit)
 .audit-clone/
