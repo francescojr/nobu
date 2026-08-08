@@ -39,3 +39,6 @@ output/audio/*
 # Local audit clones (never commit)
 .audit-clone/
 
+# Local third-party binaries (xgmtool, vendored FluidSynth, etc.)
+tools/
+

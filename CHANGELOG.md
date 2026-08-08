@@ -8,6 +8,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 This project **does not use an `[Unreleased]` section**. Every session with
 meaningful changes cuts a new `MAJOR.MINOR.PATCH` entry (via Cursor hooks).
 
+## [0.3.2] — 2026-08-08
+
+### Fixed
+
+- Mega Drive VGM scheduler: PSG/DAC drum hits no longer embed waits that crush FM note durations (melody/bass were silent under dense drums)
+
+### Changed
+
+- Drum/DAC hits are timeline events (`psg_on`/`psg_off`, per-byte DAC); regression in `scripts/test_megadrive_patches.py`
+
+## [0.3.1] — 2026-08-08
+
+### Changed
+
+- `.gitignore` ignores local `tools/` (third-party binaries such as xgmtool)
+
 ## [0.3.0] — 2026-08-08
 
 ### Added

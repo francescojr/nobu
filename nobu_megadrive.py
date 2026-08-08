@@ -561,19 +561,32 @@ def fm_key_off(channel: int) -> bytes:
     return ym_write(0, 0x28, _key_on_channel(channel))
 
 
-def psg_drum_hit(hit: str, velocity: int = 100) -> bytes:
+def _psg_drum_params(hit: str, velocity: int = 100) -> tuple[int, float, int]:
+    """Return (noise_bits, duration_sec, atten)."""
     cfg = PSG_DRUM_NOISE.get(hit, PSG_DRUM_NOISE["snare"])
     noise_bits, dur, base_att = cfg
-    # Latch noise control: 1 11 0 | NF(2) — use white (bit2=1) + rate in low bits
-    # Actually SN76489: 1110 0 NF FB? Standard: 0xE0 | ((noise_type&0x4)?) 
-    # Common: 0xE4 + rate for white noise periodic mix — use 0xE0|noise_bits
     att = max(0, min(15, base_att + (0 if velocity >= 90 else 2)))
+    return noise_bits & 0x07, float(dur), att
+
+
+def psg_drum_on(hit: str, velocity: int = 100) -> bytes:
+    """Instantaneous PSG noise trigger (no embedded wait)."""
+    noise_bits, _dur, att = _psg_drum_params(hit, velocity)
     out = bytearray()
-    out += psg_write(0xE0 | (noise_bits & 0x07))
+    out += psg_write(0xE0 | noise_bits)
     out += psg_write(0xF0 | (att & 0x0F))
-    out += vgm_wait_seconds(dur)
-    out += psg_write(0xF0 | 0x0F)  # silence
     return bytes(out)
+
+
+def psg_drum_off() -> bytes:
+    """Silence PSG noise channel."""
+    return psg_write(0xF0 | 0x0F)
+
+
+def psg_drum_hit(hit: str, velocity: int = 100) -> bytes:
+    """Self-contained hit with wait (tests/debug only — not used by scheduler)."""
+    _bits, dur, _att = _psg_drum_params(hit, velocity)
+    return psg_drum_on(hit, velocity) + vgm_wait_seconds(dur) + psg_drum_off()
 
 
 def build_vgm_header(data_len: int, total_samples: int) -> bytes:
@@ -610,17 +623,37 @@ def _pcm_data_block(sample: bytes) -> bytes:
     return bytes([0x67, 0x66, 0x00]) + struct.pack("<I", size) + sample
 
 
+def _dac_enable() -> bytes:
+    return ym_write(0, 0x2B, 0x80)
+
+
+def _dac_disable() -> bytes:
+    return ym_write(0, 0x2B, 0x00)
+
+
+def _dac_write_byte(value: int) -> bytes:
+    return ym_write(0, 0x2A, value & 0xFF)
+
+
 def _dac_play_sample(sample: bytes) -> bytes:
-    """Enable DAC, stream sample bytes with waits, disable DAC."""
+    """Self-contained DAC stream with waits (debug only — not used by scheduler)."""
     out = bytearray()
-    out += ym_write(0, 0x2B, 0x80)  # DAC enable
-    # samples per PCM byte at 44100
+    out += _dac_enable()
     step = max(1, int(round(VGM_SAMPLE_RATE / PCM_RATE)))
     for b in sample:
-        out += ym_write(0, 0x2A, b)
+        out += _dac_write_byte(b)
         out += vgm_wait_samples(step)
-    out += ym_write(0, 0x2B, 0x00)
+    out += _dac_disable()
     return bytes(out)
+
+
+# Event priority at the same timestamp (lower runs first).
+_PRIO_FM_ON = 0
+_PRIO_FM_OFF = 1
+_PRIO_DRUM_ON = 2
+_PRIO_DAC_BYTE = 3
+_PRIO_DRUM_OFF = 4
+_PRIO_DAC_OFF = 5
 
 
 def schedule_to_vgm(
@@ -628,10 +661,14 @@ def schedule_to_vgm(
     patch_bank: dict[str, PatchDict],
     pcm_samples: dict[str, bytes] | None = None,
 ) -> tuple[bytes, int, dict[str, Any]]:
-    """Build timed VGM data stream (without header)."""
+    """Build timed VGM data stream (without header).
+
+    All musical time advances through the shared event timeline. Drum/DAC hits
+    are instantaneous register writes scheduled at start/end (or per PCM byte);
+    they must not embed waits that desync FM note on/off.
+    """
     pcm_samples = pcm_samples or {}
     events: list[tuple[float, int, str, Any]] = []
-    # priority: patch load first at t=-epsilon conceptually; we preload at t=0
 
     meta = {
         "pcm_hits": [],
@@ -640,7 +677,6 @@ def schedule_to_vgm(
     }
 
     stream = bytearray()
-    # Preload patches at start
     used_patches: set[str] = set()
     for voice in assignment["fm"]:
         key = voice["patch"]
@@ -649,26 +685,55 @@ def schedule_to_vgm(
         used_patches.add(key)
     meta["patches_used"] = sorted(used_patches)
 
-    # Embed PCM data blocks up front (indexed by hit name order)
-    pcm_block_order: list[str] = []
     for hit, data in pcm_samples.items():
         stream += _pcm_data_block(data)
-        pcm_block_order.append(hit)
 
     for voice in assignment["fm"]:
         ch = voice["channel"]
         for n in voice["notes"]:
-            events.append((n["start_sec"], 0, "fm_on", (ch, n["pitch"], n["vel"])))
             events.append(
-                (n["start_sec"] + n["dur_sec"], 1, "fm_off", (ch,))
+                (n["start_sec"], _PRIO_FM_ON, "fm_on", (ch, n["pitch"], n["vel"]))
+            )
+            events.append(
+                (n["start_sec"] + n["dur_sec"], _PRIO_FM_OFF, "fm_off", (ch,))
             )
 
+    # Generation tokens: only the latest PSG/DAC owner may silence the channel.
+    psg_gen = 0
+    dac_gen = 0
     for d in assignment["drums"]:
-        events.append((d["start_sec"], 2, "drum", d))
+        hit = d["hit"]
+        start = float(d["start_sec"])
+        vel = int(d.get("vel", 100))
+        if hit in pcm_samples:
+            sample = pcm_samples[hit]
+            if not sample:
+                continue
+            dac_gen += 1
+            gen = dac_gen
+            if hit not in meta["pcm_hits"]:
+                meta["pcm_hits"].append(hit)
+            events.append((start, _PRIO_DRUM_ON, "dac_on", gen))
+            for i, b in enumerate(sample):
+                events.append(
+                    (start + i / float(PCM_RATE), _PRIO_DAC_BYTE, "dac_byte", (gen, b))
+                )
+            end = start + len(sample) / float(PCM_RATE)
+            events.append((end, _PRIO_DAC_OFF, "dac_off", gen))
+        else:
+            _bits, dur, _att = _psg_drum_params(hit, vel)
+            psg_gen += 1
+            gen = psg_gen
+            if hit not in meta["psg_fallback_hits"]:
+                meta["psg_fallback_hits"].append(hit)
+            events.append((start, _PRIO_DRUM_ON, "psg_on", (gen, hit, vel)))
+            events.append((start + dur, _PRIO_DRUM_OFF, "psg_off", gen))
 
     events.sort(key=lambda e: (e[0], e[1]))
 
     t = 0.0
+    active_psg_gen = 0
+    active_dac_gen = 0
     for abs_t, _prio, kind, payload in events:
         if abs_t > t:
             stream += vgm_wait_seconds(abs_t - t)
@@ -679,24 +744,30 @@ def schedule_to_vgm(
         elif kind == "fm_off":
             (ch,) = payload
             stream += fm_key_off(ch)
-        elif kind == "drum":
-            hit = payload["hit"]
-            if hit in pcm_samples:
-                stream += _dac_play_sample(pcm_samples[hit])
-                if hit not in meta["pcm_hits"]:
-                    meta["pcm_hits"].append(hit)
-                # DAC play advances time
-                t += len(pcm_samples[hit]) / float(PCM_RATE)
-            else:
-                stream += psg_drum_hit(hit, payload.get("vel", 100))
-                if hit not in meta["psg_fallback_hits"]:
-                    meta["psg_fallback_hits"].append(hit)
-                cfg = PSG_DRUM_NOISE.get(hit, PSG_DRUM_NOISE["snare"])
-                t += cfg[1]
+        elif kind == "psg_on":
+            gen, hit, vel = payload
+            active_psg_gen = gen
+            stream += psg_drum_on(hit, vel)
+        elif kind == "psg_off":
+            if payload == active_psg_gen:
+                stream += psg_drum_off()
+        elif kind == "dac_on":
+            active_dac_gen = payload
+            stream += _dac_enable()
+        elif kind == "dac_byte":
+            gen, b = payload
+            if gen == active_dac_gen:
+                stream += _dac_write_byte(b)
+        elif kind == "dac_off":
+            if payload == active_dac_gen:
+                stream += _dac_disable()
 
-    # Release any lingering + short tail
     for voice in assignment["fm"]:
         stream += fm_key_off(voice["channel"])
+    if active_psg_gen:
+        stream += psg_drum_off()
+    if active_dac_gen:
+        stream += _dac_disable()
     stream += vgm_wait_seconds(0.05)
     stream.append(0x66)
 
