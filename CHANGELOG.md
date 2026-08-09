@@ -8,6 +8,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 This project **does not use an `[Unreleased]` section**. Every session with
 meaningful changes cuts a new `MAJOR.MINOR.PATCH` entry (via Cursor hooks).
 
+## [0.3.4] — 2026-08-08
+
+### Fixed
+
+- Windows MCP first-call hang: eager-import `numpy`/`mido` before stdio transport (OpenBLAS loader-lock, python-sdk#2832)
+- FastMCP banner/INFO on stderr suppressed (`FASTMCP_SHOW_SERVER_BANNER=false`, `FASTMCP_LOG_LEVEL=ERROR`, `show_banner=False`) so merged-stream clients stay on clean JSON-RPC
+
+## [0.3.3] — 2026-08-08
+
+### Fixed
+
+- Mega Drive VGM scheduler: at shared note boundaries, FM key-off now runs before key-on (contiguous melody notes were keyed then instantly killed)
+
 ## [0.3.2] — 2026-08-08
 
 ### Fixed

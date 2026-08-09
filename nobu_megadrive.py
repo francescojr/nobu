@@ -648,8 +648,11 @@ def _dac_play_sample(sample: bytes) -> bytes:
 
 
 # Event priority at the same timestamp (lower runs first).
-_PRIO_FM_ON = 0
-_PRIO_FM_OFF = 1
+# Off MUST precede On: when a note ends exactly as the next begins, the old
+# note must be released before the new one is keyed, or the new note is
+# keyed on and instantly killed by the pending key-off.
+_PRIO_FM_OFF = 0
+_PRIO_FM_ON = 1
 _PRIO_DRUM_ON = 2
 _PRIO_DAC_BYTE = 3
 _PRIO_DRUM_OFF = 4

@@ -133,12 +133,75 @@ def main() -> int:
         print(f"FAIL expected psg hits in meta: {meta}")
         failures += 1
 
+    # Contiguous notes: at the shared boundary, OFF must precede ON (same channel).
+    contig = {
+        "fm": [
+            {
+                "channel": 0,
+                "patch": "lead",
+                "name": "lead",
+                "notes": [
+                    {"pitch": 60, "start_sec": 0.0, "dur_sec": 1.0, "vel": 100},
+                    {"pitch": 64, "start_sec": 1.0, "dur_sec": 1.0, "vel": 100},
+                ],
+            }
+        ],
+        "drums": [],
+        "duration": 2.0,
+        "warnings": [],
+        "pcm_reserved": False,
+        "bpm": 120,
+    }
+    stream2, _, _ = md.schedule_to_vgm(contig, md.BUILTIN_PATCHES, {})
+    keys = _fm_key_events(stream2)
+    # Expect ON → OFF → ON → OFF (boundary releases before re-key). Final key-offs
+    # at end of stream may add extras; first four must be this order.
+    expect = [("ON", 0), ("OFF", 0), ("ON", 0), ("OFF", 0)]
+    if keys[:4] != expect:
+        print(f"FAIL contiguous OFF-before-ON order: {keys[:6]} (want {expect})")
+        failures += 1
+    else:
+        print(f"OK  contiguous notes OFF before ON ({keys[:4]})")
+
     print()
     if failures:
         print(f"{failures} failure(s)")
         return 1
     print("all patch/role tests passed")
     return 0
+
+
+def _fm_key_events(stream: bytes) -> list[tuple[str, int]]:
+    """Return [('ON'|'OFF', ch), ...] for YM2612 key register writes."""
+    out: list[tuple[str, int]] = []
+    i = 0
+    while i < len(stream):
+        c = stream[i]
+        if c == 0x66:
+            break
+        if c == 0x52 and i + 2 < len(stream) and stream[i + 1] == 0x28:
+            data = stream[i + 2]
+            ch = data & 0x07
+            out.append(("ON" if data & 0xF0 else "OFF", ch))
+            i += 3
+            continue
+        if c == 0x50:
+            i += 2
+            continue
+        if c in (0x52, 0x53) and i + 2 < len(stream):
+            i += 3
+            continue
+        if c == 0x61:
+            i += 3
+            continue
+        if c in (0x62, 0x63) or 0x70 <= c <= 0x7F:
+            i += 1
+            continue
+        if 0x51 <= c <= 0x5F:
+            i += 3
+            continue
+        i += 1
+    return out
 
 
 def _count_wait_samples_between_fm_gate(stream: bytes) -> int:

@@ -25,13 +25,25 @@ tonal centers, and mood choices come from the caller (game-music-producer skill
 
 from __future__ import annotations
 
-from fastmcp import Context, FastMCP
-from midiutil import MIDIFile
-import os
 import json
+import os
 import sys
 import time
 from pathlib import Path
+
+# Suppress FastMCP banner / INFO on stderr. Some clients merge stderr into the
+# stdio JSON-RPC stream; noise there breaks the protocol.
+os.environ.setdefault("FASTMCP_SHOW_SERVER_BANNER", "false")
+os.environ.setdefault("FASTMCP_LOG_LEVEL", "ERROR")
+
+from fastmcp import Context, FastMCP
+from midiutil import MIDIFile
+
+# Eager-import OpenBLAS-backed deps on the main thread before stdio transport
+# starts. On Windows, a first `import numpy` inside a tool handler deadlocks
+# (loader lock + stdin reader thread) — modelcontextprotocol/python-sdk#2832.
+import mido  # noqa: F401
+import numpy  # noqa: F401
 
 mcp = FastMCP("nobu")
 
@@ -764,7 +776,11 @@ def render_all_modes(
 
 
 def main() -> None:
-    mcp.run()
+    # show_banner=False when supported (FastMCP 3+); env var covers older builds.
+    try:
+        mcp.run(show_banner=False)
+    except TypeError:
+        mcp.run()
 
 
 if __name__ == "__main__":
