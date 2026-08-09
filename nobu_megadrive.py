@@ -202,8 +202,42 @@ def discover_pcm(pcm_dir: str | Path | None = None) -> dict[str, Path]:
     return found
 
 
+def _lowpass_antialias(
+    samples: np.ndarray,
+    src_rate: int,
+    dest_rate: int,
+) -> np.ndarray:
+    """Hann-windowed sinc lowpass before downsampling (numpy-only, no scipy).
+
+    Cuts slightly below the destination Nyquist so bright content (hats/crash)
+    does not fold into harsh aliasing when decimating to Mega Drive DAC rate.
+    """
+    if src_rate <= dest_rate or len(samples) < 8:
+        return samples
+    # Normalized cycles/sample relative to src_rate (Nyquist = 0.5).
+    f_norm = (0.45 * float(dest_rate)) / float(src_rate)
+    f_norm = max(1e-4, min(0.49, f_norm))
+    ratio = float(src_rate) / float(dest_rate)
+    n = int(max(31, min(255, round(ratio * 16)))) | 1  # odd length
+    m = np.arange(n, dtype=np.float64) - (n - 1) / 2.0
+    h = np.empty(n, dtype=np.float64)
+    center = np.abs(m) < 1e-12
+    h[center] = 2.0 * f_norm
+    m_nz = m[~center]
+    h[~center] = np.sin(2.0 * np.pi * f_norm * m_nz) / (np.pi * m_nz)
+    h *= np.hanning(n)
+    h_sum = float(np.sum(h))
+    if abs(h_sum) > 1e-12:
+        h /= h_sum
+    return np.convolve(samples, h, mode="same")
+
+
 def wav_to_pcm_u8(path: str | Path, rate: int = PCM_RATE) -> bytes:
-    """Load WAV → mono → resample → unsigned 8-bit (0x80 silence)."""
+    """Load WAV → mono → antialias → resample → unsigned 8-bit (0x80 silence).
+
+    Target rate is Mega Drive YM2612 DAC (~13300 Hz). 8-bit quantization noise
+    is inherent; the lowpass only reduces aliasing from bright source material.
+    """
     with wave.open(str(path), "rb") as wf:
         n_ch = wf.getnchannels()
         width = wf.getsampwidth()
@@ -221,6 +255,8 @@ def wav_to_pcm_u8(path: str | Path, rate: int = PCM_RATE) -> bytes:
     if len(samples) == 0:
         return bytes([0x80])
     if src_rate != rate and len(samples) > 1:
+        if src_rate > rate:
+            samples = _lowpass_antialias(samples, src_rate, rate)
         new_len = max(1, int(round(len(samples) * rate / src_rate)))
         x_old = np.arange(len(samples), dtype=np.float64)
         x_new = np.linspace(0.0, float(len(samples) - 1), new_len)

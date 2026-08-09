@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 This project **does not use an `[Unreleased]` section**. Every session with
 meaningful changes cuts a new `MAJOR.MINOR.PATCH` entry (via Cursor hooks).
 
+## [0.3.5] — 2026-08-08
+
+### Fixed
+
+- Mega Drive PCM BYO: lowpass antialias before downsample to 13300 Hz (reduces harsh aliasing on bright hats/crash; 8-bit DAC noise floor remains authentic)
+
+### Changed
+
+- `assets/megadrive/README.md` — GenMDDJ `.gmi`→JSON guide, 808 kit→PCM names, DAC expectations
+
 ## [0.3.4] — 2026-08-08
 
 ### Fixed

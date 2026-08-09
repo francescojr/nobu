@@ -5,7 +5,10 @@ from __future__ import annotations
 import json
 import sys
 import tempfile
+import wave
 from pathlib import Path
+
+import numpy as np
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -162,6 +165,39 @@ def main() -> int:
         failures += 1
     else:
         print(f"OK  contiguous notes OFF before ON ({keys[:4]})")
+
+    # Antialias: tone above dest Nyquist is attenuated vs raw identity path.
+    src_rate = 48000
+    dest_rate = md.PCM_RATE
+    t = np.arange(src_rate, dtype=np.float64) / src_rate
+    tone_hi = np.sin(2 * np.pi * 12000.0 * t)  # aliases hard without LPF
+    filtered = md._lowpass_antialias(tone_hi, src_rate, dest_rate)
+    rms_in = float(np.sqrt(np.mean(tone_hi**2)))
+    rms_out = float(np.sqrt(np.mean(filtered**2)))
+    if rms_out >= rms_in * 0.35:
+        print(f"FAIL antialias weak: rms_in={rms_in:.4f} rms_out={rms_out:.4f}")
+        failures += 1
+    else:
+        print(f"OK  antialias attenuates 12kHz (rms {rms_in:.3f} -> {rms_out:.3f})")
+
+    with tempfile.TemporaryDirectory() as tmp:
+        wav_path = Path(tmp) / "hi.wav"
+        pcm16 = (np.clip(tone_hi, -1, 1) * 32767).astype("<i2")
+        with wave.open(str(wav_path), "wb") as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)
+            wf.setframerate(src_rate)
+            wf.writeframes(pcm16.tobytes())
+        u8 = md.wav_to_pcm_u8(wav_path, rate=dest_rate)
+        expect_len = int(round(len(tone_hi) * dest_rate / src_rate))
+        if abs(len(u8) - expect_len) > 2:
+            print(f"FAIL wav_to_pcm_u8 length {len(u8)} want ~{expect_len}")
+            failures += 1
+        elif not (0 <= min(u8) and max(u8) <= 255):
+            print("FAIL wav_to_pcm_u8 out of u8 range")
+            failures += 1
+        else:
+            print(f"OK  wav_to_pcm_u8 resample len={len(u8)}")
 
     print()
     if failures:
